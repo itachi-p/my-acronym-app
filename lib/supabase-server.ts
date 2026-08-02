@@ -11,8 +11,9 @@ export async function searchAcronyms(query: string) {
   return supabase
     .from("acronyms")
     .select("*")
-    .eq("acronym", upperQuery)
-    .maybeSingle();
+    .ilike("acronym", `${upperQuery}%`)
+    .order("acronym")
+    .limit(10);
 }
 
 export async function findAcronym(acronym: string) {

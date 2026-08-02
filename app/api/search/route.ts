@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(data ? [data] : []);
+    return NextResponse.json(data ?? []);
   } catch (err) {
     console.error("[Search] Unexpected", err);
 
