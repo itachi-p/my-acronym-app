@@ -41,10 +41,37 @@ CREATE POLICY "Allow public read access"
   ON acronyms FOR SELECT
   USING (true);
 
--- Allow insert via service role / anon (for API route)
-CREATE POLICY "Allow public insert"
-  ON acronyms FOR INSERT
-  WITH CHECK (true);
+-- Allow insert via anon key (for API route)
+-- NOTE: If INSERT fails with RLS error (code 42501), run the block below
+-- in Supabase SQL Editor to recreate policies safely.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'acronyms' AND policyname = 'Allow public insert'
+  ) THEN
+    CREATE POLICY "Allow public insert"
+      ON acronyms FOR INSERT
+      WITH CHECK (true);
+  END IF;
+END $$;
+
+-- ============================================================
+-- RLS troubleshooting (run separately if INSERT still fails)
+-- ============================================================
+-- Option A: Recreate INSERT policy (recommended)
+-- DROP POLICY IF EXISTS "Allow public insert" ON acronyms;
+-- CREATE POLICY "Allow public insert"
+--   ON acronyms FOR INSERT
+--   TO anon, authenticated
+--   WITH CHECK (true);
+--
+-- Option B: Disable RLS entirely (development only, NOT for production)
+-- ALTER TABLE acronyms DISABLE ROW LEVEL SECURITY;
+--
+-- Verify policies:
+-- SELECT policyname, cmd, roles, qual, with_check
+-- FROM pg_policies WHERE tablename = 'acronyms';
 
 -- Sample seed data
 INSERT INTO acronyms (acronym, full_spelling, reading, japanese_translation, category, description)
