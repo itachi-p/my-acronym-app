@@ -140,6 +140,12 @@ export default function Home() {
     setAiError(null);
     setManualFormOpen(false);
     setManualError(null);
+    // カテゴリタブは前回の検索語に対する絞り込みなので、新しい
+    // 検索語を打ち始めたら「すべて」に戻す。残したままだと、
+    // 例えばITタブを選んだ状態で別の略語を検索した際、バックエンドは
+    // 正しく返しているのに該当カテゴリでないというだけで結果が
+    // 表示されず「検索してもヒットしない」ように見えてしまう。
+    setCategory("すべて");
 
     if (timerRef.current) {
       clearTimeout(timerRef.current);

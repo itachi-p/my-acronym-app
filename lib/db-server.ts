@@ -23,6 +23,15 @@ function toQueryError(err: unknown): QueryError {
 // acronymは入力表記のまま保存されるため大文字小文字が揺れる。
 // 検索は lower(acronym) に対する前方一致で大文字小文字を無視する
 // (idx_acronyms_acronym_prefix はlower(acronym)に張られている)。
+//
+// 完全一致(例: "BS")を、より長い前方一致(例: "BSJ")より必ず先に
+// 並べる。理由: 1つの略語に複数解釈を許すようになったことで、
+// 短い人気の略語ほど完全一致の行数が増えやすく、LIMITと前方一致が
+// 組み合わさると、より長い派生略語の行が完全一致の行を押し出して
+// 検索結果から溢れてしまう(実際に本番で"BS"検索時、完全一致7件+
+// "BSJ"3件で計10件がLIMITぎりぎりになり発生した事象)。
+// また ORDER BY acronym だけでは同じacronym同士の並び順が
+// 保証されないため、そちらも full_spelling をタイブレークに追加する。
 export async function searchAcronyms(query: string) {
   const lowerQuery = query.toLowerCase();
 
@@ -30,8 +39,8 @@ export async function searchAcronyms(query: string) {
     const data = (await sql`
       SELECT * FROM acronyms
       WHERE lower(acronym) LIKE ${lowerQuery + "%"}
-      ORDER BY acronym
-      LIMIT 10
+      ORDER BY (lower(acronym) <> ${lowerQuery}), acronym, full_spelling
+      LIMIT 20
     `) as unknown as Acronym[];
 
     return { data, error: null };
