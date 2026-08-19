@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
-    const query = request.nextUrl.searchParams.get("q")?.trim().toUpperCase() ?? "";
+    const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
 
     if (query.length < 2) {
       return NextResponse.json([], {

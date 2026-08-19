@@ -54,7 +54,9 @@ function normalizeCategory(category: string): AcronymCategory {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const acronym = String(body.acronym ?? "").trim().toUpperCase();
+    // 入力の強制大文字化はしない(TOCfEのような大小混在表記が
+    // それ自体AIへの手がかりになるため、入力表記のままGroqに渡す)。
+    const acronym = String(body.acronym ?? "").trim();
 
     if (!acronym) {
       return NextResponse.json(

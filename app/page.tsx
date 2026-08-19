@@ -131,9 +131,10 @@ export default function Home() {
   }, []);
 
   const handleChange = (value: string) => {
-    const q = value.toUpperCase();
-
-    setQuery(q);
+    // 入力の強制大文字化はしない。TOCfE (Theory of Constraints for
+    // Education) のように大小文字混在の略語が存在し、変換すると
+    // 元の表記を復元できないため、入力されたままの表記を保持する。
+    setQuery(value);
     setSelected(null);
     setSearchError(null);
     setAiError(null);
@@ -145,7 +146,7 @@ export default function Home() {
     }
 
     timerRef.current = setTimeout(() => {
-      search(q);
+      search(value);
     }, 300);
   };
 
@@ -256,8 +257,10 @@ export default function Home() {
           ref={inputRef}
           value={query}
           onChange={(e) => handleChange(e.target.value)}
-          placeholder="略語を入力 (例: CEO, API)"
-          autoCapitalize="characters"
+          placeholder="略語を入力 (例: CEO, API, TOCfE)"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
           className="w-full rounded-xl border-2 border-indigo-300 bg-white px-4 py-3 text-lg text-slate-900 placeholder-slate-500 focus:border-indigo-600 focus:outline-none dark:border-indigo-700 dark:bg-slate-800 dark:text-white"
         />
 

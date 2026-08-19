@@ -6,7 +6,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const acronym = String(body.acronym ?? "").trim().toUpperCase();
+    // 入力の強制大文字化はしない。TOCfEのような大小混在表記が
+    // 存在するため、保存する値は入力表記のままにする。
+    const acronym = String(body.acronym ?? "").trim();
     const full_spelling = String(body.full_spelling ?? "").trim();
     const japanese_translation = String(body.japanese_translation ?? "").trim();
     const category = String(body.category ?? "");
@@ -58,11 +60,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // (acronym, full_spelling) の複合UNIQUE制約に抵触した場合、
-    // insertAcronymsはON CONFLICT DO NOTHINGで黙ってスキップするため
-    // 返り値が空配列になる。手動登録は人間による単発の意図的な操作
-    // なので、AIの一括登録と違って黙って無視せず、重複である旨を
-    // 明示的にエラーで返す。
+    // lower(acronym), lower(full_spelling)の大文字小文字を無視した
+    // UNIQUEインデックスに抵触した場合、insertAcronymsはON CONFLICT
+    // DO NOTHINGで黙ってスキップするため返り値が空配列になる。
+    // 手動登録は人間による単発の意図的な操作なので、AIの一括登録と
+    // 違って黙って無視せず、重複である旨を明示的にエラーで返す。
     if (!data || data.length === 0) {
       return NextResponse.json(
         {
