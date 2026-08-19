@@ -37,35 +37,44 @@ export async function searchAcronyms(query: string) {
   }
 }
 
-export async function findAcronym(acronym: string) {
-  try {
-    const rows = (await sql`
-      SELECT * FROM acronyms
-      WHERE acronym = ${acronym.toUpperCase()}
-      LIMIT 1
-    `) as unknown as Acronym[];
-
-    return { data: rows[0] ?? null, error: null };
-  } catch (err) {
-    return { data: null, error: toQueryError(err) };
+// 複数解釈(同一acronym・異なるfull_spelling)を一括INSERTする。
+// (acronym, full_spelling)の複合UNIQUE制約に抵触した行は
+// ON CONFLICT DO NOTHINGでスキップし、エラーにはしない。
+// RETURNING * は実際にINSERTされた行のみを返すため、既存行は
+// 戻り値に含まれない。
+export async function insertAcronyms(
+  rows: Omit<Acronym, "id" | "created_at">[]
+) {
+  if (rows.length === 0) {
+    return { data: [], error: null };
   }
-}
 
-export async function insertAcronym(acronym: Omit<Acronym, "id" | "created_at">) {
   try {
-    const rows = (await sql`
-      INSERT INTO acronyms (acronym, full_spelling, japanese_translation, category, description)
-      VALUES (
-        ${acronym.acronym},
-        ${acronym.full_spelling},
-        ${acronym.japanese_translation},
-        ${acronym.category},
-        ${acronym.description}
-      )
-      RETURNING *
-    `) as unknown as Acronym[];
+    const params: unknown[] = [];
+    const valuesSql = rows
+      .map((row, i) => {
+        const base = i * 5;
+        params.push(
+          row.acronym,
+          row.full_spelling,
+          row.japanese_translation,
+          row.category,
+          row.description
+        );
 
-    return { data: rows[0], error: null };
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`;
+      })
+      .join(", ");
+
+    const inserted = (await sql.query(
+      `INSERT INTO acronyms (acronym, full_spelling, japanese_translation, category, description)
+       VALUES ${valuesSql}
+       ON CONFLICT (acronym, full_spelling) DO NOTHING
+       RETURNING *`,
+      params
+    )) as unknown as Acronym[];
+
+    return { data: inserted, error: null };
   } catch (err) {
     return { data: null, error: toQueryError(err) };
   }

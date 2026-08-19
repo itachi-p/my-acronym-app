@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CATEGORIES, type AcronymCategory } from "@/lib/types";
-import { findAcronym, insertAcronym } from "@/lib/db-server";
+import { insertAcronyms } from "@/lib/db-server";
 
 const VALID_CATEGORIES = CATEGORIES.filter(
   (category): category is AcronymCategory => category !== "すべて"
 );
+
+const MAX_RESULTS = 4;
 
 const SYSTEM_PROMPT = `
 あなたは英語略語（アクロニム）の専門家です。
@@ -12,14 +14,24 @@ const SYSTEM_PROMPT = `
 必ずJSONのみを返してください。
 Markdown記法や説明文は不要です。
 
+同じ略語が分野によって異なる意味を持つことがあります。
+与えられた略語について、確実に存在すると分かっている意味だけを
+1〜${MAX_RESULTS}件、配列で返してください。
+件数を無理に埋めようとせず、根拠が確実でない解釈は含めないでください。
+複数の意味を返す場合は、できるだけ異なるジャンル（カテゴリ）に
+またがる解釈を優先してください。
+
 形式:
 
 {
-  "acronym": "大文字略語",
-  "full_spelling": "英語正式名称",
-  "japanese_translation": "日本語訳",
-  "category": "カテゴリ",
-  "description": "初心者向け説明"
+  "results": [
+    {
+      "full_spelling": "英語正式名称",
+      "japanese_translation": "日本語訳",
+      "category": "カテゴリ",
+      "description": "初心者向け説明"
+    }
+  ]
 }
 
 言語に関する指示（必ず守ること）:
@@ -145,30 +157,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const insertData = {
-      acronym: String(parsed.acronym ?? acronym).trim().toUpperCase(),
-      full_spelling: String(parsed.full_spelling ?? ""),
-      japanese_translation: String(parsed.japanese_translation ?? ""),
-      category: normalizeCategory(String(parsed.category ?? "")),
-      description: String(parsed.description ?? ""),
-    };
+    const rawResults = Array.isArray(parsed.results) ? parsed.results : [];
 
-    const { data, error } = await insertAcronym(insertData);
+    const insertData = rawResults
+      .slice(0, MAX_RESULTS)
+      .map((item) => {
+        const result = (item ?? {}) as Record<string, unknown>;
+
+        return {
+          acronym,
+          full_spelling: String(result.full_spelling ?? "").trim(),
+          japanese_translation: String(result.japanese_translation ?? "").trim(),
+          category: normalizeCategory(String(result.category ?? "")),
+          description: String(result.description ?? "").trim(),
+        };
+      })
+      .filter((row) => row.full_spelling !== "");
+
+    if (insertData.length === 0) {
+      console.error("[Groq Empty Results]", content);
+
+      return NextResponse.json(
+        {
+          error: "確実な意味が見つかりませんでした",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
+    const { data, error } = await insertAcronyms(insertData);
 
     if (error) {
       console.error("[DB Insert Error]", error);
-
-      // 同じ略語が既に存在する場合
-      // DB側のUNIQUE制約によるエラー
-      if (error.code === "23505") {
-        const { data: existing, error: findError } = await findAcronym(
-          insertData.acronym
-        );
-
-        if (!findError && existing) {
-          return NextResponse.json(existing);
-        }
-      }
 
       return NextResponse.json(
         {

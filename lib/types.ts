@@ -31,8 +31,9 @@ export interface Acronym {
   created_at: string;
 }
 
-export interface AiAcronymResponse {
-  acronym: string;
+// AIが返す1つの解釈。同一acronymが複数の意味を持つ場合、
+// これの配列 ({ results: AiAcronymResult[] }) がAPIレスポンスになる。
+export interface AiAcronymResult {
   full_spelling: string;
   japanese_translation: string;
   category: AcronymCategory;

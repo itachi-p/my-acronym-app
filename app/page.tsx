@@ -148,11 +148,21 @@ export default function Home() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error ?? "AI生成失敗");
+        const message =
+          data && typeof data === "object" && "error" in data
+            ? String((data as { error?: unknown }).error)
+            : "AI生成失敗";
+
+        throw new Error(message);
       }
 
-      setSelected(data);
-      setResults([data]);
+      // 登録直後はGET /api/searchを叩き直さず、POSTの戻り値を
+      // そのまま反映する。1件のみ登録された場合は詳細を直接開き、
+      // 複数の解釈が登録された場合は一覧から選ばせる。
+      const items = Array.isArray(data) ? (data as Acronym[]) : [];
+
+      setResults(items);
+      setSelected(items.length === 1 ? items[0] : null);
     } catch (error: unknown) {
       setAiError(error instanceof Error ? error.message : "通信エラー");
     } finally {
@@ -217,7 +227,12 @@ export default function Home() {
                 onClick={() => setSelected(item)}
                 className="w-full rounded-xl border-2 border-slate-300 bg-slate-50 p-4 text-left transition-all hover:border-indigo-400 hover:bg-indigo-50 hover:shadow-md dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700"
               >
-                <div className="font-bold text-indigo-700 dark:text-indigo-300">{item.acronym}</div>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-bold text-indigo-700 dark:text-indigo-300">{item.acronym}</div>
+                  <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+                    {CATEGORY_DISPLAY_NAMES[item.category]}
+                  </span>
+                </div>
                 <div className="text-sm text-slate-700 dark:text-slate-300">{item.japanese_translation}</div>
               </button>
             ))

@@ -24,11 +24,18 @@ CREATE TABLE IF NOT EXISTS acronyms (
 
     created_at timestamptz NOT NULL DEFAULT now(),
 
-    -- (b) acronym の一意制約。
-    -- UNIQUE制約はacronym単体のB-treeインデックスを自動生成するため、
-    -- 完全一致検索(=)やORDER BY acronymはこれで足りる。
-    CONSTRAINT acronyms_acronym_unique
-        UNIQUE (acronym),
+    -- (b) acronym + full_spelling の複合一意制約。
+    -- 同一略語が領域ごとに異なる正式名称を持つケース
+    -- (例: VSPRO = Vision/Strategy/Process/Resource/Organization という
+    -- ビジネスフレームワークと、ITの別概念の両方)に対応するため、
+    -- acronym単体ではなく(acronym, full_spelling)の組でユニークとする。
+    -- categoryではなくfull_spellingを使うのは、同一カテゴリ内でも
+    -- 正式名称が異なる別解釈がありうるため。
+    -- このUNIQUE制約は(acronym, full_spelling)の複合B-treeインデックスを
+    -- 自動生成する。先頭列がacronymなので、acronym単体での完全一致検索や
+    -- ORDER BY acronymにもこのインデックスがそのまま使える。
+    CONSTRAINT acronyms_acronym_full_spelling_unique
+        UNIQUE (acronym, full_spelling),
 
     CONSTRAINT acronyms_uppercase_check
         CHECK (acronym = UPPER(acronym)),
