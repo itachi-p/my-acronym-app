@@ -73,6 +73,7 @@ export default function Home() {
   const [selected, setSelected] = useState<Acronym | null>(null);
   const [category, setCategory] = useState<Category>("すべて");
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
@@ -83,19 +84,30 @@ export default function Home() {
   const search = useCallback(async (value: string) => {
     if (value.length < 2) {
       setResults([]);
+      setSearchError(null);
       return;
     }
 
     setLoading(true);
+    setSearchError(null);
 
     try {
       const res = await fetch(`/api/search?q=${encodeURIComponent(value)}`);
       const data = await res.json();
 
-      setResults(Array.isArray(data) ? data : []);
+      if (!res.ok || !Array.isArray(data)) {
+        setResults([]);
+        setSearchError(
+          typeof data?.error === "string" ? data.error : "検索に失敗しました"
+        );
+        return;
+      }
+
+      setResults(data);
     } catch (error) {
       console.error(error);
       setResults([]);
+      setSearchError("通信エラーが発生しました");
     } finally {
       setLoading(false);
     }
@@ -106,6 +118,7 @@ export default function Home() {
 
     setQuery(q);
     setSelected(null);
+    setSearchError(null);
     setAiError(null);
 
     if (timerRef.current) {
@@ -210,14 +223,20 @@ export default function Home() {
             ))
           )}
 
-          {query.length >= 2 && !loading && results.length === 0 && !aiLoading && (
-            <button
-              onClick={handleAiGenerate}
-              className="w-full rounded-2xl bg-indigo-600 px-5 py-4 text-white"
-            >
-              🤖 AIで「{query}」を調査して登録
-            </button>
-          )}
+          {searchError && <p className="text-red-600">⚠ {searchError}</p>}
+
+          {query.length >= 2 &&
+            !loading &&
+            !searchError &&
+            results.length === 0 &&
+            !aiLoading && (
+              <button
+                onClick={handleAiGenerate}
+                className="w-full rounded-2xl bg-indigo-600 px-5 py-4 text-white"
+              >
+                🤖 AIで「{query}」を調査して登録
+              </button>
+            )}
 
           {aiLoading && <p>Geminiで調査中...</p>}
 
