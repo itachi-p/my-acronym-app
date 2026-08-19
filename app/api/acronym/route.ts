@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CATEGORIES, type AcronymCategory } from "@/lib/types";
+import { ACRONYM_CATEGORIES, type AcronymCategory } from "@/lib/types";
 import { insertAcronyms } from "@/lib/db-server";
-
-const VALID_CATEGORIES = CATEGORIES.filter(
-  (category): category is AcronymCategory => category !== "すべて"
-);
 
 const MAX_RESULTS = 4;
 
@@ -42,13 +38,13 @@ Markdown記法や説明文は不要です。
 
 categoryは以下から必ず1つ選択してください。
 
-${VALID_CATEGORIES.join("\n")}
+${ACRONYM_CATEGORIES.join("\n")}
 `;
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 function normalizeCategory(category: string): AcronymCategory {
-  if (VALID_CATEGORIES.includes(category as AcronymCategory)) {
+  if (ACRONYM_CATEGORIES.includes(category as AcronymCategory)) {
     return category as AcronymCategory;
   }
 

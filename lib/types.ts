@@ -11,6 +11,10 @@ export const CATEGORIES = [
 export type Category = (typeof CATEGORIES)[number];
 export type AcronymCategory = Exclude<Category, "すべて">;
 
+export const ACRONYM_CATEGORIES = CATEGORIES.filter(
+  (category): category is AcronymCategory => category !== "すべて"
+);
+
 export const CATEGORY_DISPLAY_NAMES: Record<Category, string> = {
   "すべて": "すべて",
   "ビジネス・経営": "経営",
