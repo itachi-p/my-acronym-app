@@ -22,6 +22,12 @@ Markdown記法や説明文は不要です。
   "description": "初心者向け説明"
 }
 
+言語に関する指示（必ず守ること）:
+- description と japanese_translation は必ず日本語で記述してください。英語で書かないでください。
+- japanese_translation には、その分野で定着している定訳のみを1つ返してください。
+  カタカナ音写や、英語・別訳の括弧書きでの併記はしないでください。
+  （悪い例: 「シグイント（信号情報）」／良い例: 「信号情報」）
+
 categoryは以下から必ず1つ選択してください。
 
 ${VALID_CATEGORIES.join("\n")}

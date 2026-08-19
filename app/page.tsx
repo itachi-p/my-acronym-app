@@ -5,10 +5,10 @@ import { CATEGORIES, CATEGORY_DISPLAY_NAMES, type Acronym, type Category } from 
 
 function DetailCard({ item }: { item: Acronym }) {
   const wikiUrl = `https://ja.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(
-    item.acronym
+    item.full_spelling
   )}`;
   const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(
-    `${item.acronym} 略語 意味`
+    `${item.acronym} ${item.full_spelling}`
   )}`;
 
   return (
