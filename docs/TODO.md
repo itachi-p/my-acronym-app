@@ -19,6 +19,16 @@
   詳細はdocs/decisions.md 11章を参照
 
 ## 未着手
+- 既存のゴミレコード削除
+  背景: システムプロンプトの件数指定が「1〜4件」だった間に、
+  自明語・非展開・企業名・表記ゆれ重複等の低品質な解釈が
+  本番DBに登録されている（実例: BSで7件、JDで4件、MITの
+  「Made in Taiwan」「MIT License」、TNTの「TNT Express」、
+  LPの「Long Play」、FDEの「または」併記）。フィルタ基準は
+  decisions.md 13章でプロンプト側に導入したが、既存レコードは
+  自動では削除されない。削除・編集機能が未実装のため、現状は
+  NeonのSQL Editorを直接操作するしかない
+
 - docs/seed.sql の再エクスポート
   背景: 本番DBの既存レコードのうち全小文字だったacronym（bbs/seo/tnt等）
   はSQLでupper()済みだが、docs/seed.sqlはその修正前の状態のまま
