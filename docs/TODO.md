@@ -19,15 +19,80 @@
   詳細はdocs/decisions.md 11章を参照
 
 ## 未着手
-- 既存のゴミレコード削除
-  背景: システムプロンプトの件数指定が「1〜4件」だった間に、
-  自明語・非展開・企業名・表記ゆれ重複等の低品質な解釈が
-  本番DBに登録されている（実例: BSで7件、JDで4件、MITの
-  「Made in Taiwan」「MIT License」、TNTの「TNT Express」、
-  LPの「Long Play」、FDEの「または」併記）。フィルタ基準は
-  decisions.md 13章でプロンプト側に導入したが、既存レコードは
-  自動では削除されない。削除・編集機能が未実装のため、現状は
-  NeonのSQL Editorを直接操作するしかない
+
+## 優先順（2026-08-19時点）
+上から順に片付ける。新しい論点は下に積み、割り込ませない。
+
+### 1. 既存レコードの削除（ゴミ掃除）
+AI調査のフィルタを強化しても既存レコードは消えないため、手で落とす。
+削除候補（実行前に再確認すること）:
+- MIT: Made in Taiwan（展開すれば自明）
+- MIT: MIT License（略語の展開になっていない）
+- TNT: TNT Express（同上。元は Thomas Nationwide Transport）
+- LP: Long Play（展開すれば自明）
+- BSJ: Buddhist Society of Japan（実在・流通が未確認）
+- FDE: Fiscal Deficit Estimation（または〜）（full_spelling に併記）
+- FDE: Fully Diluted Earnings（または〜）（同上）
+- FDE: Full-Day Equivalent（FTE との取り違えの疑い）
+
+保留（要判断）:
+- BS: Broadcasting Satellite（放送衛星を対象に含めるか）
+- 学位（BS: Bachelor of Science / JD: Juris Doctor /
+  LLM: Legum Magister / BSJ: Bachelor of Science in Journalism）
+
+削除済み（2026-08-19）:
+- BS: Broadcast Satellite（Broadcasting Satellite と重複）
+- VSPRO: Vision, Strategy, Process, Resource, Organization（ハイフン区切り版と重複）
+
+### 2. Skills の登録と試用
+zip 2つは取得済み（未登録）。docs/skills.md を配置する。
+- code-task-brief: Claude Code への作業指示書を生成する
+- table-cleanup: テーブル整理と統合・削除SQLの提示（実行はしない）
+
+### 3. 削除・編集機能はアプリ側実装不要、の判断を記録
+アプリ内に破壊的操作を置くと公開時に認証が必要になるため、
+table-cleanup Skill 経由に分離する。権限はリポジトリと
+DB接続情報の保有で線引きされる。
+トレードオフ（誤登録の即時取り消しができない）も併記して
+decisions.md に記録すること。
+
+### 4. 外部公開の検討
+1〜3 が済むまで出さない。
+決めるべきこと: 書き込みの開放範囲、レート制限の要否。
+確認すべき事実:
+- Neon 無料枠は 100 CU-hours/プロジェクト/月（0.25 CU で約400時間相当）。
+  1ヶ月は約730時間のため、5分間隔を切るアクセスが続くと月内に枠を
+  使い切り compute が停止する。常時アクセスは利点ではなくリスク
+- docs 内の「90日非アクティブでプロジェクト削除」は2026年1月の
+  無料枠改定で扱いが変わっている可能性がある。要確認
+- POST /api/acronym は無認証で Groq を消費する
+
+### 5. カテゴリの追加(保留)
+現状6分類、「その他」は64件中15件。判断を保留する。
+理由: 該当が各5〜6件では分ける根拠が薄い。タブが増えると
+モバイルでレイアウトが崩れる。分類の切り方自体も未確定
+（学術／科学／医療の境界、ITや軍事も広義には科学に含まれる）。
+再検討のトリガー: 「その他」が全体の3割を超えたとき。
+UI: カテゴリが8を超えるならタブではなくプルダウンを検討する。
+
+### 6. MAX_RESULTS の扱い
+プロンプトで1〜2件に絞ったが、app/api/acronym/route.ts の
+MAX_RESULTS は4のまま。コード側でも上限を担保するか、
+プロンプトのみで抑えるか未決。
+
+### 7. 文字正規化と特殊文字の扱い
+RAG: Retrieval‑Augmented Generation のハイフンが U+2011。
+NFKC 正規化で寄せるか、許可文字を制限するか。実害が出ていないため低優先。
+
+### 8. 検索クエリのインデックス利用確認
+lower(acronym) の前方一致が UNIQUE 複合インデックスを使えているか
+EXPLAIN で確認する。現状のボトルネックは件数ではなく Neon の
+コールドスタート（500ms〜2秒）であり、実測するまで要否は決まらない。
+
+### 9. 単一テーブル維持の判断（記録のみ）
+テーブル分割はしない。繰り返される値は category のみで、
+6種類の固定値。CHECK制約で担保済み。マスタ化しても JOIN が
+増えるだけで得がない。decisions.md に記録すること。
 
 - docs/seed.sql の再エクスポート
   背景: 本番DBの既存レコードのうち全小文字だったacronym（bbs/seo/tnt等）
@@ -35,17 +100,6 @@
   （本タスクでは再エクスポートしていない）。SQLでの修正は
   decisions.md 12章参照。次にseed.sqlを触る際、本番Neonの現状データで
   再エクスポートし、差分を解消すること
-
-- レコードの削除・編集機能
-  背景: AI調査+INSERTの導線を増やしている（Enterキー、今後の
-  ショートカット方式B・共有シート）一方で、登録済みレコードを
-  削除・修正する手段がアプリ内に存在しない。
-  誤登録の例: 入力途中（例: SIGINTと打つ途中のSIGIN）で
-  結果0件の状態のままEnterを押すと、断片的な文字列でAI調査が走り
-  そのまま登録される可能性がある。
-  現状の対処はNeonのSQL Editorを直接操作するしかない。
-  入口を増やすほど誤登録の確率が上がるため、入口整備より
-  優先度が高い可能性がある。
 
 - 検索結果が期待と違った場合の再調査導線
   現状、未登録語は1回のAI調査結果が無条件に登録される。
