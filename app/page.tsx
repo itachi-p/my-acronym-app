@@ -310,13 +310,11 @@ export default function Home() {
           ref={inputRef}
           value={query}
           onChange={(e) => handleChange(e.target.value)}
-          placeholder="略語"
+          placeholder="略語を入力 (例: CEO, API, TOCfE)"
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
-          // 略語は長くてもせいぜい5文字程度なので、フルwidthの
-          // テキストボックスではなく短辺に寄せたコンパクトな見た目にする。
-          className="mx-auto block w-40 rounded-xl border-2 border-indigo-300 bg-white px-4 py-3 text-center text-lg text-slate-900 placeholder-slate-500 focus:border-indigo-600 focus:outline-none dark:border-indigo-700 dark:bg-slate-800 dark:text-white"
+          className="w-full rounded-xl border-2 border-indigo-300 bg-white px-4 py-3 text-lg text-slate-900 placeholder-slate-500 focus:border-indigo-600 focus:outline-none dark:border-indigo-700 dark:bg-slate-800 dark:text-white"
         />
 
         <div className="mt-4 flex gap-2 overflow-x-auto">
