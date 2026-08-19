@@ -1,22 +1,14 @@
 -- ==========================================================
--- Acronyms table (Rebuild)
+-- Acronyms table (Neon / plain Postgres)
+-- Supabase固有機能(RLS/ポリシー/GRANT)は使用しないため削除。
+-- Neonの接続ロール(接続文字列のユーザー)がテーブル所有者になり、
+-- 所有者はデフォルトで自分のテーブルに対する全権限を持つため、
+-- 明示的なGRANT文は不要。
 -- ==========================================================
 
--- Drop old policies
-DROP POLICY IF EXISTS "Allow public read access" ON public.acronyms;
-DROP POLICY IF EXISTS "Allow public insert" ON public.acronyms;
-
--- Drop old table
-DROP TABLE IF EXISTS public.acronyms CASCADE;
-
--- UUID extension
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- ==========================================================
--- Table
--- ==========================================================
-
-CREATE TABLE public.acronyms (
+CREATE TABLE IF NOT EXISTS acronyms (
 
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -32,86 +24,48 @@ CREATE TABLE public.acronyms (
 
     created_at timestamptz NOT NULL DEFAULT now(),
 
+    -- (b) acronym の一意制約。
+    -- UNIQUE制約はacronym単体のB-treeインデックスを自動生成するため、
+    -- 完全一致検索(=)やORDER BY acronymはこれで足りる。
     CONSTRAINT acronyms_acronym_unique
-        UNIQUE(acronym),
+        UNIQUE (acronym),
 
     CONSTRAINT acronyms_uppercase_check
-        CHECK (acronym = UPPER(acronym))
+        CHECK (acronym = UPPER(acronym)),
+
+    -- (c) category のCHECK制約。lib/types.ts の CATEGORIES（"すべて"を除く6件）と一致させること。
+    CONSTRAINT acronyms_category_check
+        CHECK (
+            category IN (
+                'ビジネス・経営',
+                '金融・株式',
+                '政治・行政',
+                '軍事・安全保障',
+                'IT・テクノロジー',
+                'その他'
+            )
+        )
 
 );
 
 -- ==========================================================
--- Index
+-- (a) 前方一致検索用インデックス
 -- ==========================================================
-
-CREATE INDEX idx_acronyms_acronym
-ON public.acronyms(acronym);
-
--- ==========================================================
--- RLS
--- ==========================================================
-
-ALTER TABLE public.acronyms
-ENABLE ROW LEVEL SECURITY;
-
--- Everyone can SELECT
-
-CREATE POLICY "Allow public read access"
-ON public.acronyms
-FOR SELECT
-TO public
-USING (true);
+-- 検索クエリは常に `WHERE acronym LIKE 'XX%'` の形（前方一致）。
+-- acronym は acronyms_uppercase_check により常に大文字で保存され、
+-- アプリ側（app/page.tsx・APIルート）も検索語を送信前に必ず
+-- toUpperCase() している。つまり検索時点で大文字・小文字の揺れは
+-- 発生しないため、大文字小文字を無視するILIKEや lower(acronym) の
+-- 式インデックスは不要で、素の acronym 列に対する
+-- text_pattern_ops のB-treeインデックスで前方一致検索が最短距離で効く。
+-- （デフォルトのtext_ops索引は等号・ORDER BY用で、LIKEの前方一致には
+-- 使われないため text_pattern_ops が必須）
+CREATE INDEX IF NOT EXISTS idx_acronyms_acronym_prefix
+ON acronyms (acronym text_pattern_ops);
 
 -- ==========================================================
--- Sample Data
+-- Sample / seed data はこのファイルに含めない。
+-- Supabase(旧環境)から移行した実データは docs/seed.sql にあり、
+-- 元のid/created_atを保持したまま投入できる。このschema.sqlを
+-- 適用した後、続けて docs/seed.sql を実行すること。
 -- ==========================================================
-
-INSERT INTO public.acronyms
-(
-    acronym,
-    full_spelling,
-    japanese_translation,
-    category,
-    description
-)
-VALUES
-
-(
-'API',
-'Application Programming Interface',
-'アプリケーション・プログラミング・インターフェース',
-'IT・テクノロジー',
-'ソフトウェア同士がデータや機能をやり取りするための仕組み。'
-),
-
-(
-'CEO',
-'Chief Executive Officer',
-'最高経営責任者',
-'ビジネス・経営',
-'企業の経営全体に責任を持つ最高責任者。'
-),
-
-(
-'NATO',
-'North Atlantic Treaty Organization',
-'北大西洋条約機構',
-'軍事・安全保障',
-'欧州・北米を中心とする集団防衛を目的とした軍事同盟。'
-),
-
-(
-'FDIC',
-'Federal Deposit Insurance Corporation',
-'連邦預金保険公社',
-'金融・株式',
-'アメリカの預金保険制度を運営する政府系機関。'
-),
-
-(
-'GDP',
-'Gross Domestic Product',
-'国内総生産',
-'政治・行政',
-'一定期間内に国内で生産された付加価値の合計を表す経済指標。'
-);

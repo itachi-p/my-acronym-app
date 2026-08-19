@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchAcronyms } from "@/lib/supabase-server";
+import { searchAcronyms } from "@/lib/db-server";
 
 export async function GET(request: NextRequest) {
   try {
