@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ACRONYM_CATEGORIES, type AcronymCategory } from "@/lib/types";
 import { insertAcronyms } from "@/lib/db-server";
+import { normalizeAcronymCasing } from "@/lib/normalize-acronym";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // 入力の強制大文字化はしない。TOCfEのような大小混在表記が
-    // 存在するため、保存する値は入力表記のままにする。
-    const acronym = String(body.acronym ?? "").trim();
+    // 大文字を1文字も含まない入力（bbs/seo等）のみ全大文字化する。
+    // TOCfEのような大小混在表記はそのまま保存する
+    // （normalizeAcronymCasing参照。decisions.md参照）。
+    const acronym = normalizeAcronymCasing(String(body.acronym ?? "").trim());
     const full_spelling = String(body.full_spelling ?? "").trim();
     const japanese_translation = String(body.japanese_translation ?? "").trim();
     const category = String(body.category ?? "");

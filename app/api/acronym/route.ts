@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ACRONYM_CATEGORIES, type AcronymCategory } from "@/lib/types";
 import { insertAcronyms } from "@/lib/db-server";
+import { normalizeAcronymCasing } from "@/lib/normalize-acronym";
 
 const MAX_RESULTS = 4;
 
@@ -54,9 +55,10 @@ function normalizeCategory(category: string): AcronymCategory {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    // 入力の強制大文字化はしない(TOCfEのような大小混在表記が
-    // それ自体AIへの手がかりになるため、入力表記のままGroqに渡す)。
-    const acronym = String(body.acronym ?? "").trim();
+    // 大文字を1文字も含まない入力（bbs/seo等）のみ全大文字化する。
+    // TOCfE/IoT/mRNAのような大小混在表記はそのままGroqに渡し、保存する
+    // （normalizeAcronymCasing参照。decisions.md参照）。
+    const acronym = normalizeAcronymCasing(String(body.acronym ?? "").trim());
 
     if (!acronym) {
       return NextResponse.json(
