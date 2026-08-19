@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import {
   ACRONYM_CATEGORIES,
   CATEGORIES,
@@ -83,6 +90,7 @@ function DetailCard({ item, onClose }: { item: Acronym; onClose: () => void }) {
 export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const isComposingRef = useRef(false);
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Acronym[]>([]);
@@ -275,6 +283,30 @@ export default function Home() {
     }
   };
 
+  const handleSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter") return;
+    // IME変換確定のEnterでAI調査が誤発火しないようにする。
+    // compositionイベントとnativeEvent.isComposingの両方を見るのは、
+    // Safari等一部ブラウザでcompositionendの発火タイミングが
+    // keydownより後ろにずれ、片方だけでは確定Enterを拾ってしまう
+    // ケースがあるため。
+    if (isComposingRef.current || e.nativeEvent.isComposing) return;
+
+    // AIボタンの表示条件と揃える。結果が既にある状態でのEnterは
+    // 何もしない(誤操作による不要なAI調査を防ぐ)。
+    if (
+      query.length < 2 ||
+      loading ||
+      searchError ||
+      aiLoading ||
+      results.length > 0
+    ) {
+      return;
+    }
+
+    handleAiGenerate();
+  };
+
   const filtered =
     category === "すべて"
       ? results
@@ -310,6 +342,13 @@ export default function Home() {
           ref={inputRef}
           value={query}
           onChange={(e) => handleChange(e.target.value)}
+          onKeyDown={handleSearchKeyDown}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            isComposingRef.current = false;
+          }}
           placeholder="略語を入力 (例: CEO, API, TOCfE)"
           autoCapitalize="off"
           autoCorrect="off"
