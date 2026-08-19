@@ -87,11 +87,18 @@ docs/
 - UI導線は検索語が2文字以上の間、`results.length`に関わらず
   常時表示（「✍️ 手動で登録」/「✍️ 別の意味を手動で追加」）
 
-### 大文字小文字の扱い
-- 入力表記は強制変換せず、そのまま保存・AIへ渡す
-  （TOCfEのような大小混在表記が存在するため）
+### 大文字小文字の扱い（2026-08-19改訂）
+- `lib/normalize-acronym.ts` の `normalizeAcronymCasing` で、入力に
+  大文字が1文字も含まれない場合のみ全大文字化する（bbs→BBS）。
+  1文字でも大文字を含む場合はそのまま保存・AIへ渡す
+  （TOCfE/IoT/mRNAのような大小混在表記を保持するため）
+- AI調査（`POST /api/acronym`）・手動登録
+  （`POST /api/acronym/manual`）の両経路がこの関数を通る。
+  AI調査側はGroqへ渡す前・DB保存前の両方に適用（`acronym`変数を
+  正規化後、Groqプロンプトと`insertAcronyms`双方に使い回している）
 - 一意性・検索・重複判定はすべて `lower()` を通した比較
-  （UNIQUEインデックス、検索LIKE句とも）
+  （UNIQUEインデックス、検索LIKE句とも）。この部分は今回変更していない
+- 詳細: decisions.md 12章
 
 ### `?q=` ディープリンク起動
 - `app/page.tsx` の起動時`useEffect`で `window.location.search`

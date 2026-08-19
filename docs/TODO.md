@@ -19,6 +19,13 @@
   詳細はdocs/decisions.md 11章を参照
 
 ## 未着手
+- docs/seed.sql の再エクスポート
+  背景: 本番DBの既存レコードのうち全小文字だったacronym（bbs/seo/tnt等）
+  はSQLでupper()済みだが、docs/seed.sqlはその修正前の状態のまま
+  （本タスクでは再エクスポートしていない）。SQLでの修正は
+  decisions.md 12章参照。次にseed.sqlを触る際、本番Neonの現状データで
+  再エクスポートし、差分を解消すること
+
 - レコードの削除・編集機能
   背景: AI調査+INSERTの導線を増やしている（Enterキー、今後の
   ショートカット方式B・共有シート）一方で、登録済みレコードを
