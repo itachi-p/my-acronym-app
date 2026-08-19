@@ -31,7 +31,7 @@ export interface Acronym {
   created_at: string;
 }
 
-export interface GeminiAcronymResponse {
+export interface AiAcronymResponse {
   acronym: string;
   full_spelling: string;
   japanese_translation: string;

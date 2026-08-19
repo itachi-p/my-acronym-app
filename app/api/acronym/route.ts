@@ -1,17 +1,10 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { CATEGORIES, type AcronymCategory } from "@/lib/types";
+import { findAcronym, insertAcronym } from "@/lib/db-server";
 
-const VALID_CATEGORIES = [
-  "ビジネス・経営",
-  "金融・株式",
-  "政治・行政",
-  "軍事・安全保障",
-  "IT・テクノロジー",
-  "その他",
-] as const;
-
-type AcronymCategory = (typeof VALID_CATEGORIES)[number];
+const VALID_CATEGORIES = CATEGORIES.filter(
+  (category): category is AcronymCategory => category !== "すべて"
+);
 
 const SYSTEM_PROMPT = `
 あなたは英語略語（アクロニム）の専門家です。
@@ -31,41 +24,10 @@ Markdown記法や説明文は不要です。
 
 categoryは以下から必ず1つ選択してください。
 
-ビジネス・経営
-金融・株式
-政治・行政
-軍事・安全保障
-IT・テクノロジー
-その他
+${VALID_CATEGORIES.join("\n")}
 `;
 
-function createSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !key) {
-    throw new Error("Supabase environment variables are missing");
-  }
-
-  return createClient(url, key);
-}
-
-function parseGeminiJson(text: string) {
-  const cleaned = text
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/```$/i, "")
-    .trim();
-
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-
-  if (start === -1 || end === -1) {
-    throw new Error("Gemini response is not JSON");
-  }
-
-  return JSON.parse(cleaned.substring(start, end + 1));
-}
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 function normalizeCategory(category: string): AcronymCategory {
   if (VALID_CATEGORIES.includes(category as AcronymCategory)) {
@@ -91,12 +53,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
 
     if (!apiKey) {
       return NextResponse.json(
         {
-          error: "GEMINI_API_KEY が設定されていません",
+          error: "GROQ_API_KEY が設定されていません",
         },
         {
           status: 500,
@@ -104,32 +66,53 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: process.env.GEMINI_MODEL ?? "gemini-2.0-flash",
-      systemInstruction: SYSTEM_PROMPT,
-    });
+    const model = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
 
-    let responseText = "";
+    let content: string;
 
     try {
-      const result = await model.generateContent(
-        `略語「${acronym}」について説明してください`
-      );
+      const groqResponse = await fetch(GROQ_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: `略語「${acronym}」について説明してください` },
+          ],
+          response_format: { type: "json_object" },
+        }),
+      });
 
-      responseText = result.response.text();
+      if (!groqResponse.ok) {
+        const detail = await groqResponse.text();
+
+        console.error("[Groq Error]", groqResponse.status, detail);
+
+        return NextResponse.json(
+          {
+            error: "Groq API 呼び出しに失敗しました",
+            detail,
+          },
+          {
+            status: 500,
+          }
+        );
+      }
+
+      const groqJson = await groqResponse.json();
+      content = groqJson.choices?.[0]?.message?.content ?? "";
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
 
-      console.error("[Gemini Error]", {
-        message,
-        status: error instanceof Error ? undefined : undefined,
-        statusText: undefined,
-      });
+      console.error("[Groq Error]", message);
 
       return NextResponse.json(
         {
-          error: "Gemini API 呼び出しに失敗しました",
+          error: "Groq API 呼び出しに失敗しました",
           detail: message,
         },
         {
@@ -138,17 +121,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let parsed;
+    let parsed: Record<string, unknown>;
 
     try {
-      parsed = parseGeminiJson(responseText);
+      parsed = JSON.parse(content);
     } catch {
-      console.error("[Gemini Parse Error]", responseText);
+      console.error("[Groq Parse Error]", content);
 
       return NextResponse.json(
         {
-          error: "Geminiの応答解析に失敗しました",
-          raw: responseText,
+          error: "Groqの応答解析に失敗しました",
+          raw: content,
         },
         {
           status: 500,
@@ -157,33 +140,26 @@ export async function POST(request: NextRequest) {
     }
 
     const insertData = {
-      acronym: String(parsed.acronym).trim().toUpperCase(),
-      full_spelling: String(parsed.full_spelling),
-      japanese_translation: String(parsed.japanese_translation),
-      category: normalizeCategory(String(parsed.category)),
-      description: String(parsed.description),
+      acronym: String(parsed.acronym ?? acronym).trim().toUpperCase(),
+      full_spelling: String(parsed.full_spelling ?? ""),
+      japanese_translation: String(parsed.japanese_translation ?? ""),
+      category: normalizeCategory(String(parsed.category ?? "")),
+      description: String(parsed.description ?? ""),
     };
 
-    const supabase = createSupabaseClient();
-    const { data, error } = await supabase
-      .from("acronyms")
-      .insert(insertData)
-      .select()
-      .single();
+    const { data, error } = await insertAcronym(insertData);
 
     if (error) {
-      console.error("[Supabase Insert Error]", error);
+      console.error("[DB Insert Error]", error);
 
       // 同じ略語が既に存在する場合
       // DB側のUNIQUE制約によるエラー
       if (error.code === "23505") {
-        const { data: existing, error: selectError } = await supabase
-          .from("acronyms")
-          .select("*")
-          .eq("acronym", insertData.acronym)
-          .single();
+        const { data: existing, error: findError } = await findAcronym(
+          insertData.acronym
+        );
 
-        if (!selectError) {
+        if (!findError && existing) {
           return NextResponse.json(existing);
         }
       }

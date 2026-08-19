@@ -238,7 +238,7 @@ export default function Home() {
               </button>
             )}
 
-          {aiLoading && <p>Geminiで調査中...</p>}
+          {aiLoading && <p>AIで調査中...</p>}
 
           {aiError && <p className="text-red-600">{aiError}</p>}
         </div>
