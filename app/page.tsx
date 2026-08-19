@@ -10,7 +10,7 @@ import {
   type Category,
 } from "@/lib/types";
 
-function DetailCard({ item }: { item: Acronym }) {
+function DetailCard({ item, onClose }: { item: Acronym; onClose: () => void }) {
   const wikiUrl = `https://ja.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(
     item.full_spelling
   )}`;
@@ -19,7 +19,7 @@ function DetailCard({ item }: { item: Acronym }) {
   )}`;
 
   return (
-    <div className="animate-fade-in rounded-2xl border border-indigo-200/60 bg-white p-5 shadow-lg shadow-indigo-100/50 dark:border-indigo-800/40 dark:bg-slate-900">
+    <div className="animate-fade-in rounded-2xl border border-indigo-200/60 bg-white p-5 shadow-xl shadow-indigo-200/60 dark:border-indigo-800/40 dark:bg-slate-900">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
@@ -27,9 +27,18 @@ function DetailCard({ item }: { item: Acronym }) {
           </h2>
           <p className="mt-1 text-sm text-slate-500">{item.full_spelling}</p>
         </div>
-        <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-          {item.category}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+            {item.category}
+          </span>
+          <button
+            onClick={onClose}
+            aria-label="閉じる"
+            className="rounded-full p-1 text-lg leading-none text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       <dl className="space-y-3">
@@ -94,15 +103,11 @@ export default function Home() {
   const [manualLoading, setManualLoading] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
   const search = useCallback(async (value: string) => {
     if (value.length < 2) {
       setResults([]);
       setSearchError(null);
-      return;
+      return [];
     }
 
     setLoading(true);
@@ -117,18 +122,43 @@ export default function Home() {
         setSearchError(
           typeof data?.error === "string" ? data.error : "検索に失敗しました"
         );
-        return;
+        return [];
       }
 
       setResults(data);
+      return data as Acronym[];
     } catch (error) {
       console.error(error);
       setResults([]);
       setSearchError("通信エラーが発生しました");
+      return [];
     } finally {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    // iOSショートカット等、URLに ?q=XX を付けて外部起動された場合は
+    // その場で検索まで自動で行う(手早く調べるのが目的の起動経路なので、
+    // 起動後にもう一度入力させない)。1件だけヒットした場合はそのまま
+    // 詳細を開く。通常のブラウザ起動時(qなし)は従来通り入力欄へ
+    // フォーカスするだけにする。
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get("q")?.trim();
+
+    if (!q) {
+      inputRef.current?.focus();
+      return;
+    }
+
+    setQuery(q);
+
+    search(q).then((items) => {
+      if (items.length === 1) {
+        setSelected(items[0]);
+      }
+    });
+  }, [search]);
 
   const handleChange = (value: string) => {
     // 入力の強制大文字化はしない。TOCfE (Theory of Constraints for
@@ -252,6 +282,23 @@ export default function Home() {
 
   return (
     <main className="min-h-dvh bg-gradient-to-b from-indigo-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+      {/*
+        結果はポップアップ(オーバーレイ)で表示する。ショートカット等
+        から起動して即座に1件へ自動遷移するケースを想定し、背後の
+        検索画面をリセットせずに一目で読んで閉じられるようにするため。
+        背景タップまたは✕ボタンで閉じる。
+      */}
+      {selected && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 pt-16 backdrop-blur-sm sm:items-center sm:pt-4"
+          onClick={() => setSelected(null)}
+        >
+          <div className="w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <DetailCard item={selected} onClose={() => setSelected(null)} />
+          </div>
+        </div>
+      )}
+
       <div className="mx-auto max-w-lg px-4 py-6">
         <h1 className="mb-1 text-2xl font-bold">Acronym Finder</h1>
 
@@ -263,11 +310,13 @@ export default function Home() {
           ref={inputRef}
           value={query}
           onChange={(e) => handleChange(e.target.value)}
-          placeholder="略語を入力 (例: CEO, API, TOCfE)"
+          placeholder="略語"
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
-          className="w-full rounded-xl border-2 border-indigo-300 bg-white px-4 py-3 text-lg text-slate-900 placeholder-slate-500 focus:border-indigo-600 focus:outline-none dark:border-indigo-700 dark:bg-slate-800 dark:text-white"
+          // 略語は長くてもせいぜい5文字程度なので、フルwidthの
+          // テキストボックスではなく短辺に寄せたコンパクトな見た目にする。
+          className="mx-auto block w-40 rounded-xl border-2 border-indigo-300 bg-white px-4 py-3 text-center text-lg text-slate-900 placeholder-slate-500 focus:border-indigo-600 focus:outline-none dark:border-indigo-700 dark:bg-slate-800 dark:text-white"
         />
 
         <div className="mt-4 flex gap-2 overflow-x-auto">
@@ -289,31 +338,21 @@ export default function Home() {
         <div className="mt-5 space-y-3">
           {loading && <p>検索中...</p>}
 
-          {selected ? (
-            <>
-              <button onClick={() => setSelected(null)} className="text-indigo-600">
-                ← 戻る
-              </button>
-
-              <DetailCard item={selected} />
-            </>
-          ) : (
-            filtered.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setSelected(item)}
-                className="w-full rounded-xl border-2 border-slate-300 bg-slate-50 p-4 text-left transition-all hover:border-indigo-400 hover:bg-indigo-50 hover:shadow-md dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="font-bold text-indigo-700 dark:text-indigo-300">{item.acronym}</div>
-                  <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-                    {CATEGORY_DISPLAY_NAMES[item.category]}
-                  </span>
-                </div>
-                <div className="text-sm text-slate-700 dark:text-slate-300">{item.japanese_translation}</div>
-              </button>
-            ))
-          )}
+          {filtered.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setSelected(item)}
+              className="w-full rounded-xl border-2 border-slate-300 bg-slate-50 p-4 text-left transition-all hover:border-indigo-400 hover:bg-indigo-50 hover:shadow-md dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="font-bold text-indigo-700 dark:text-indigo-300">{item.acronym}</div>
+                <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+                  {CATEGORY_DISPLAY_NAMES[item.category]}
+                </span>
+              </div>
+              <div className="text-sm text-slate-700 dark:text-slate-300">{item.japanese_translation}</div>
+            </button>
+          ))}
 
           {searchError && <p className="text-red-600">⚠ {searchError}</p>}
 
