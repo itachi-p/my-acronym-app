@@ -25,11 +25,28 @@ async function searchAcronymsLocalClone(query: string) {
   }
 }
 
+// 関数境界(呼び出し経由)であること自体が原因かどうかを切り分ける。
+// フレッシュなクライアントを関数内部で生成し、パラメータ経由で
+// クエリ文字列を受け取る点はsearchAcronymsと同一。実行順は先頭。
+async function wrappedFreshCall(q: string) {
+  const s = neon(process.env.DATABASE_URL!);
+  const lq = q.toLowerCase();
+  return (await s`
+    SELECT acronym FROM acronyms
+    WHERE lower(acronym) LIKE ${lq + "%"}
+    ORDER BY (lower(acronym) <> ${lq}), acronym, full_spelling
+    LIMIT 20
+  `) as unknown[];
+}
+
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const rawQ = request.nextUrl.searchParams.get("q");
   const trimmedQ = rawQ?.trim() ?? "";
+
+  // 最優先で実行: 関数呼び出し経由 + フレッシュクライアント + 引数渡し。
+  const wrappedFreshResult = await wrappedFreshCall(trimmedQ);
 
   // 完全に新規のneon()クライアントで、他の何も挟まずに同一クエリを
   // 連続2回実行する。1回目と2回目で結果が変わるかを見る、最終確認。
@@ -113,6 +130,7 @@ export async function GET(request: NextRequest) {
       viaLocalCloneError: viaLocalClone?.error ?? null,
       freshCall1Count: freshCall1.length,
       freshCall2Count: freshCall2.length,
+      wrappedFreshResultCount: wrappedFreshResult.length,
       timingMsFn1: t1 - t0,
       timingMsFn2: t2 - t1,
       explainPlan: explainRows[0]?.["QUERY PLAN"] ?? null,
