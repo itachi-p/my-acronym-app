@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
+import { searchAcronyms } from "@/lib/db-server";
 
 // TEMPORARY: 検索が0件を返す原因切り分け用の一時診断ルート。
 // 確認終了後に削除すること（このファイル自体を削除するだけでよい）。
@@ -7,7 +8,11 @@ const sql = neon(process.env.DATABASE_URL!);
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const rawQ = request.nextUrl.searchParams.get("q");
+  const trimmedQ = rawQ?.trim() ?? "";
+  const viaRealFn = trimmedQ.length >= 2 ? await searchAcronyms(trimmedQ) : null;
+
   const [row] = await sql`
     SELECT
       current_database() AS current_database,
@@ -28,7 +33,16 @@ export async function GET() {
   `) as unknown[];
 
   return NextResponse.json(
-    { ...row, searchLikeCount: searchLike.length, searchLikeRows: searchLike },
+    {
+      ...row,
+      searchLikeCount: searchLike.length,
+      searchLikeRows: searchLike,
+      rawQ,
+      trimmedQ,
+      rawQCharCodes: rawQ ? Array.from(rawQ).map((c) => c.charCodeAt(0)) : null,
+      viaRealFnCount: viaRealFn?.data?.length ?? null,
+      viaRealFnError: viaRealFn?.error ?? null,
+    },
     {
       headers: { "Cache-Control": "no-store" },
     }
