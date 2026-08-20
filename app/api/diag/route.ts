@@ -17,7 +17,20 @@ export async function GET() {
       (SELECT max(created_at) FROM acronyms) AS newest
   `;
 
-  return NextResponse.json(row, {
-    headers: { "Cache-Control": "no-store" },
-  });
+  // searchAcronyms(lib/db-server.ts)と同一構造のクエリを再現し、
+  // パラメータ化クエリ自体に問題がないか切り分ける。
+  const lowerQuery = "npo";
+  const searchLike = (await sql`
+    SELECT acronym, full_spelling, id, created_at FROM acronyms
+    WHERE lower(acronym) LIKE ${lowerQuery + "%"}
+    ORDER BY (lower(acronym) <> ${lowerQuery}), acronym, full_spelling
+    LIMIT 20
+  `) as unknown[];
+
+  return NextResponse.json(
+    { ...row, searchLikeCount: searchLike.length, searchLikeRows: searchLike },
+    {
+      headers: { "Cache-Control": "no-store" },
+    }
+  );
 }
