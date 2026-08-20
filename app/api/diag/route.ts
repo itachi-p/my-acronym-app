@@ -44,11 +44,20 @@ export async function GET(request: NextRequest) {
     LIMIT 20
   `) as unknown[];
 
+  // searchAcronymsとSELECT列まで完全一致させた版(ローカルsqlクライアント使用)。
+  const searchLikeSelectStar = (await sql`
+    SELECT * FROM acronyms
+    WHERE lower(acronym) LIKE ${lowerQuery + "%"}
+    ORDER BY (lower(acronym) <> ${lowerQuery}), acronym, full_spelling
+    LIMIT 20
+  `) as unknown[];
+
   return NextResponse.json(
     {
       ...row,
       searchLikeCount: searchLike.length,
       searchLikeRows: searchLike,
+      searchLikeSelectStarCount: searchLikeSelectStar.length,
       rawQ,
       trimmedQ,
       rawQCharCodes: rawQ ? Array.from(rawQ).map((c) => c.charCodeAt(0)) : null,
