@@ -5,14 +5,20 @@ import type { Acronym } from "./types";
 // node-postgres(pg)はサーバーレス環境(Vercel等)でコネクションが
 // 枯渇するため使わない方針。
 //
-// sql はモジュール単位でシングルトン化せず、呼び出しごとに生成する。
-// neon()クライアントはNeon側でコネクションをキャッシュ/使い回すため、
-// ウォームなサーバーレス関数インスタンスで使い回されるシングルトンだと、
-// 直近でコミットされた行を拾えない(古いスナップショットを握ったまま
-// 返す)事象が本番で確認されたため。
-function getSql() {
-  return neon(process.env.DATABASE_URL!);
-}
+// fetchOptions.cache: "no-store" が必須。このドライバは内部でPOSTの
+// fetch()を発行するが、これがNext.jsのData Cache(サーバー内部の
+// fetchキャッシュ)の対象になり得る。実際に本番で、SQL文のテキストが
+// 一切変化しない検索クエリ(searchAcronyms)だけが、DBには対象行が
+// 存在するのに空配列を返し続ける事象が発生した。原因はSQL文が
+// クエリキャッシュのキーとなり、対象行がまだ存在しなかった頃の
+// 空レスポンスがキャッシュされたまま返り続けていたこと(クエリの
+// 空白を1文字変えるだけでキャッシュキーが変わり正しい結果に戻る
+// ことで再現・特定した)。ルート側のdynamic="force-dynamic"だけでは
+// このモジュール内部のfetchキャッシュは無効化されなかったため、
+// ここで明示的にno-storeを指定する。
+const sql = neon(process.env.DATABASE_URL!, {
+  fetchOptions: { cache: "no-store" },
+});
 
 type QueryError = { message: string; code?: string };
 
@@ -41,35 +47,11 @@ function toQueryError(err: unknown): QueryError {
 // また ORDER BY acronym だけでは同じacronym同士の並び順が
 // 保証されないため、そちらも full_spelling をタイブレークに追加する。
 export async function searchAcronyms(query: string) {
-  const sql = getSql();
   const lowerQuery = query.toLowerCase();
 
   try {
     const data = (await sql`
       SELECT * FROM acronyms
-      WHERE lower(acronym) LIKE ${lowerQuery + "%"}
-      ORDER BY (lower(acronym) <> ${lowerQuery}), acronym, full_spelling
-      LIMIT 20
-    `) as unknown as Acronym[];
-
-    return { data, error: null };
-  } catch (err) {
-    return { data: null, error: toQueryError(err) };
-  }
-}
-
-// TEMPORARY: 診断用。searchAcronymsと全く同一のロジックを、
-// 過去に一度も存在しなかった新しい関数名で複製したもの。
-// ビルドキャッシュが特定の関数/ファイルに古いコンパイル結果を
-// 握ったままになっていないかを切り分けるためだけに存在する。
-// 確認後にこの関数ごと削除すること。
-export async function searchAcronymsDiagTest(query: string) {
-  const sql = getSql();
-  const lowerQuery = query.toLowerCase();
-
-  try {
-    const data = (await sql`
-      SELECT   * FROM acronyms
       WHERE lower(acronym) LIKE ${lowerQuery + "%"}
       ORDER BY (lower(acronym) <> ${lowerQuery}), acronym, full_spelling
       LIMIT 20
@@ -94,8 +76,6 @@ export async function insertAcronyms(
   if (rows.length === 0) {
     return { data: [], error: null };
   }
-
-  const sql = getSql();
 
   try {
     const params: unknown[] = [];
