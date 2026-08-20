@@ -1,6 +1,6 @@
 # 実装状態サマリ
 
-最終更新: 2026-08-19
+最終更新: 2026-08-20
 
 このファイルの目的: 別セッション・別ツール（他のAIエージェント含む）が
 このリポジトリで作業を再開する際、既存実装を把握せずに重複実装や
@@ -46,8 +46,13 @@ docs/
   `searchAcronyms`）。完全一致を前方一致より必ず先に並べる
   （`ORDER BY (lower(acronym) <> query), acronym, full_spelling`）
 - `GET /api/search` は `dynamic = "force-dynamic"` +
-  `Cache-Control: no-store` で明示的にキャッシュ無効化
-  （理由: decisions.md 7章）
+  `Cache-Control: no-store` を明示しているが、これらは
+  ブラウザ・CDN等リクエストの外側のキャッシュにしか効かない
+  （理由: decisions.md 7章）。`@neondatabase/serverless` が
+  内部で発行する`fetch()`はNext.jsのサーバー内部Data Cacheの
+  対象になり得るため、`lib/db-server.ts` の `neon()` に
+  `fetchOptions: { cache: "no-store" }` を別途指定している
+  （理由: decisions.md 14章）
 - カテゴリタブ（`すべて`/`ビジネス・経営`/...）はクライアント側で
   `results` を絞り込むフィルタ。新しい検索語を打ち始めると
   `すべて` にリセットされる
