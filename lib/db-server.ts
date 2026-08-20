@@ -4,7 +4,15 @@ import type { Acronym } from "./types";
 // @neondatabase/serverless のHTTPドライバを使用。
 // node-postgres(pg)はサーバーレス環境(Vercel等)でコネクションが
 // 枯渇するため使わない方針。
-const sql = neon(process.env.DATABASE_URL!);
+//
+// sql はモジュール単位でシングルトン化せず、呼び出しごとに生成する。
+// neon()クライアントはNeon側でコネクションをキャッシュ/使い回すため、
+// ウォームなサーバーレス関数インスタンスで使い回されるシングルトンだと、
+// 直近でコミットされた行を拾えない(古いスナップショットを握ったまま
+// 返す)事象が本番で確認されたため。
+function getSql() {
+  return neon(process.env.DATABASE_URL!);
+}
 
 type QueryError = { message: string; code?: string };
 
@@ -33,6 +41,7 @@ function toQueryError(err: unknown): QueryError {
 // また ORDER BY acronym だけでは同じacronym同士の並び順が
 // 保証されないため、そちらも full_spelling をタイブレークに追加する。
 export async function searchAcronyms(query: string) {
+  const sql = getSql();
   const lowerQuery = query.toLowerCase();
 
   try {
@@ -62,6 +71,8 @@ export async function insertAcronyms(
   if (rows.length === 0) {
     return { data: [], error: null };
   }
+
+  const sql = getSql();
 
   try {
     const params: unknown[] = [];
