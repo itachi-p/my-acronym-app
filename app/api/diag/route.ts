@@ -6,6 +6,25 @@ import { searchAcronyms } from "@/lib/db-server";
 // 確認終了後に削除すること（このファイル自体を削除するだけでよい）。
 const sql = neon(process.env.DATABASE_URL!);
 
+// lib/db-server.ts の searchAcronyms を一字一句そのまま複製したローカル版。
+// import境界(モジュール分離)自体が原因かどうかを切り分けるための一時コード。
+async function searchAcronymsLocalClone(query: string) {
+  const lowerQuery = query.toLowerCase();
+
+  try {
+    const data = await sql`
+      SELECT * FROM acronyms
+      WHERE lower(acronym) LIKE ${lowerQuery + "%"}
+      ORDER BY (lower(acronym) <> ${lowerQuery}), acronym, full_spelling
+      LIMIT 20
+    `;
+
+    return { data, error: null };
+  } catch (err) {
+    return { data: null, error: String(err) };
+  }
+}
+
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
@@ -19,6 +38,7 @@ export async function GET(request: NextRequest) {
   // 本番で確実に機能しているクエリ(BS)を同じ関数経由で呼び、
   // 「関数経由だと常に0件になる」のか「NPO固有」なのかを切り分ける。
   const viaRealFnBS = await searchAcronyms("BS");
+  const viaLocalClone = await searchAcronymsLocalClone(trimmedQ);
 
   const explainRows = (await sql`
     EXPLAIN (FORMAT JSON)
@@ -71,6 +91,8 @@ export async function GET(request: NextRequest) {
       viaRealFn1Raw: viaRealFn1,
       viaRealFnBSCount: viaRealFnBS?.data?.length ?? null,
       viaRealFnBSError: viaRealFnBS?.error ?? null,
+      viaLocalCloneCount: viaLocalClone?.data?.length ?? null,
+      viaLocalCloneError: viaLocalClone?.error ?? null,
       timingMsFn1: t1 - t0,
       timingMsFn2: t2 - t1,
       explainPlan: explainRows[0]?.["QUERY PLAN"] ?? null,
