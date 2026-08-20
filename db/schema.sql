@@ -75,7 +75,7 @@ ON acronyms (lower(acronym) text_pattern_ops);
 
 -- ==========================================================
 -- Sample / seed data はこのファイルに含めない。
--- Supabase(旧環境)から移行した実データは docs/seed.sql にあり、
+-- Supabase(旧環境)から移行した実データは db/seed.sql にあり、
 -- 元のid/created_atを保持したまま投入できる。このschema.sqlを
--- 適用した後、続けて docs/seed.sql を実行すること。
+-- 適用した後、続けて db/seed.sql を実行すること。
 -- ==========================================================
