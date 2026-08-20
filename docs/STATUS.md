@@ -32,7 +32,8 @@ public/
 docs/
   decisions.md               設計判断の経緯（why中心）
   TODO.md                    未着手タスク
-  seed.sql / schema.sql      DBスキーマ・シードデータ
+db/
+  schema.sql / seed.sql      DBスキーマ・シードデータ（Neon復元用、実行時には読まれない）
 ```
 
 ## 機能別の実装状態
@@ -141,7 +142,7 @@ docs/
 ## 既知の制約
 
 - Neon無料プランは90日非アクティブでプロジェクト削除対象。
-  `docs/seed.sql`・`docs/schema.sql`から復元可能な状態を維持すること
+  `db/seed.sql`・`db/schema.sql`から復元可能な状態を維持すること
 - Neon無料枠は5分非アクティブでコンピュートがスケールゼロし、
   コールドスタートで500ms〜2秒かかることがある（速度目的の移行ではない）
 

@@ -94,9 +94,9 @@ EXPLAIN で確認する。現状のボトルネックは件数ではなく Neon 
 6種類の固定値。CHECK制約で担保済み。マスタ化しても JOIN が
 増えるだけで得がない。decisions.md に記録すること。
 
-- docs/seed.sql の再エクスポート
+- db/seed.sql の再エクスポート
   背景: 本番DBの既存レコードのうち全小文字だったacronym（bbs/seo/tnt等）
-  はSQLでupper()済みだが、docs/seed.sqlはその修正前の状態のまま
+  はSQLでupper()済みだが、db/seed.sqlはその修正前の状態のまま
   （本タスクでは再エクスポートしていない）。SQLでの修正は
   decisions.md 12章参照。次にseed.sqlを触る際、本番Neonの現状データで
   再エクスポートし、差分を解消すること
@@ -166,4 +166,4 @@ EXPLAIN で確認する。現状のボトルネックは件数ではなく Neon 
 
 ## 既知の制約
 - Neon無料プランは90日非アクティブでプロジェクトが削除対象。
-  docs/seed.sql と schema.sql から復元可能な状態を維持すること
+  db/seed.sql と db/schema.sql から復元可能な状態を維持すること
