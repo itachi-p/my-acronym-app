@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
-import { searchAcronyms } from "@/lib/db-server";
+import { searchAcronyms, searchAcronymsDiagTest } from "@/lib/db-server";
 
 // TEMPORARY: 検索が0件を返す原因切り分け用の一時診断ルート。
 // 確認終了後に削除すること（このファイル自体を削除するだけでよい）。
@@ -74,6 +74,7 @@ export async function GET(request: NextRequest) {
   // 「関数経由だと常に0件になる」のか「NPO固有」なのかを切り分ける。
   const viaRealFnBS = await searchAcronyms("BS");
   const viaLocalClone = await searchAcronymsLocalClone(trimmedQ);
+  const viaDiagTestFn = await searchAcronymsDiagTest(trimmedQ);
 
   const explainRows = (await sql`
     EXPLAIN (FORMAT JSON)
@@ -131,6 +132,8 @@ export async function GET(request: NextRequest) {
       freshCall1Count: freshCall1.length,
       freshCall2Count: freshCall2.length,
       wrappedFreshResultCount: wrappedFreshResult.length,
+      viaDiagTestFnCount: viaDiagTestFn?.data?.length ?? null,
+      viaDiagTestFnError: viaDiagTestFn?.error ?? null,
       timingMsFn1: t1 - t0,
       timingMsFn2: t2 - t1,
       explainPlan: explainRows[0]?.["QUERY PLAN"] ?? null,

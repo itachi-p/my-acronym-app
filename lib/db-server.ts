@@ -58,6 +58,29 @@ export async function searchAcronyms(query: string) {
   }
 }
 
+// TEMPORARY: 診断用。searchAcronymsと全く同一のロジックを、
+// 過去に一度も存在しなかった新しい関数名で複製したもの。
+// ビルドキャッシュが特定の関数/ファイルに古いコンパイル結果を
+// 握ったままになっていないかを切り分けるためだけに存在する。
+// 確認後にこの関数ごと削除すること。
+export async function searchAcronymsDiagTest(query: string) {
+  const sql = getSql();
+  const lowerQuery = query.toLowerCase();
+
+  try {
+    const data = (await sql`
+      SELECT * FROM acronyms
+      WHERE lower(acronym) LIKE ${lowerQuery + "%"}
+      ORDER BY (lower(acronym) <> ${lowerQuery}), acronym, full_spelling
+      LIMIT 20
+    `) as unknown as Acronym[];
+
+    return { data, error: null };
+  } catch (err) {
+    return { data: null, error: toQueryError(err) };
+  }
+}
+
 // 複数解釈(同一acronym・異なるfull_spelling)を一括INSERTする。
 // lower(acronym), lower(full_spelling)の大文字小文字を無視した
 // UNIQUEインデックスに抵触した行はON CONFLICT DO NOTHINGでスキップし、
