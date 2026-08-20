@@ -16,6 +16,9 @@ export async function GET(request: NextRequest) {
   const t1 = Date.now();
   const viaRealFn2 = trimmedQ.length >= 2 ? await searchAcronyms(trimmedQ) : null;
   const t2 = Date.now();
+  // 本番で確実に機能しているクエリ(BS)を同じ関数経由で呼び、
+  // 「関数経由だと常に0件になる」のか「NPO固有」なのかを切り分ける。
+  const viaRealFnBS = await searchAcronyms("BS");
 
   const explainRows = (await sql`
     EXPLAIN (FORMAT JSON)
@@ -65,6 +68,9 @@ export async function GET(request: NextRequest) {
       viaRealFn1Error: viaRealFn1?.error ?? null,
       viaRealFn2Count: viaRealFn2?.data?.length ?? null,
       viaRealFn2Error: viaRealFn2?.error ?? null,
+      viaRealFn1Raw: viaRealFn1,
+      viaRealFnBSCount: viaRealFnBS?.data?.length ?? null,
+      viaRealFnBSError: viaRealFnBS?.error ?? null,
       timingMsFn1: t1 - t0,
       timingMsFn2: t2 - t1,
       explainPlan: explainRows[0]?.["QUERY PLAN"] ?? null,
