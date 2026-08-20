@@ -69,7 +69,7 @@ export async function searchAcronymsDiagTest(query: string) {
 
   try {
     const data = (await sql`
-      SELECT * FROM acronyms
+      SELECT   * FROM acronyms
       WHERE lower(acronym) LIKE ${lowerQuery + "%"}
       ORDER BY (lower(acronym) <> ${lowerQuery}), acronym, full_spelling
       LIMIT 20
