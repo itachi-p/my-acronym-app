@@ -30,6 +30,24 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const rawQ = request.nextUrl.searchParams.get("q");
   const trimmedQ = rawQ?.trim() ?? "";
+
+  // 完全に新規のneon()クライアントで、他の何も挟まずに同一クエリを
+  // 連続2回実行する。1回目と2回目で結果が変わるかを見る、最終確認。
+  const freshSql = neon(process.env.DATABASE_URL!);
+  const freshLower = trimmedQ.toLowerCase();
+  const freshCall1 = (await freshSql`
+    SELECT acronym FROM acronyms
+    WHERE lower(acronym) LIKE ${freshLower + "%"}
+    ORDER BY (lower(acronym) <> ${freshLower}), acronym, full_spelling
+    LIMIT 20
+  `) as unknown[];
+  const freshCall2 = (await freshSql`
+    SELECT acronym FROM acronyms
+    WHERE lower(acronym) LIKE ${freshLower + "%"}
+    ORDER BY (lower(acronym) <> ${freshLower}), acronym, full_spelling
+    LIMIT 20
+  `) as unknown[];
+
   const t0 = Date.now();
   const viaRealFn1 = trimmedQ.length >= 2 ? await searchAcronyms(trimmedQ) : null;
   const t1 = Date.now();
@@ -93,6 +111,8 @@ export async function GET(request: NextRequest) {
       viaRealFnBSError: viaRealFnBS?.error ?? null,
       viaLocalCloneCount: viaLocalClone?.data?.length ?? null,
       viaLocalCloneError: viaLocalClone?.error ?? null,
+      freshCall1Count: freshCall1.length,
+      freshCall2Count: freshCall2.length,
       timingMsFn1: t1 - t0,
       timingMsFn2: t2 - t1,
       explainPlan: explainRows[0]?.["QUERY PLAN"] ?? null,
