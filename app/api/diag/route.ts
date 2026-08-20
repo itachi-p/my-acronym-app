@@ -11,7 +11,19 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const rawQ = request.nextUrl.searchParams.get("q");
   const trimmedQ = rawQ?.trim() ?? "";
-  const viaRealFn = trimmedQ.length >= 2 ? await searchAcronyms(trimmedQ) : null;
+  const t0 = Date.now();
+  const viaRealFn1 = trimmedQ.length >= 2 ? await searchAcronyms(trimmedQ) : null;
+  const t1 = Date.now();
+  const viaRealFn2 = trimmedQ.length >= 2 ? await searchAcronyms(trimmedQ) : null;
+  const t2 = Date.now();
+
+  const explainRows = (await sql`
+    EXPLAIN (FORMAT JSON)
+    SELECT * FROM acronyms
+    WHERE lower(acronym) LIKE ${trimmedQ.toLowerCase() + "%"}
+    ORDER BY (lower(acronym) <> ${trimmedQ.toLowerCase()}), acronym, full_spelling
+    LIMIT 20
+  `) as { "QUERY PLAN": unknown }[];
 
   const [row] = await sql`
     SELECT
@@ -40,8 +52,13 @@ export async function GET(request: NextRequest) {
       rawQ,
       trimmedQ,
       rawQCharCodes: rawQ ? Array.from(rawQ).map((c) => c.charCodeAt(0)) : null,
-      viaRealFnCount: viaRealFn?.data?.length ?? null,
-      viaRealFnError: viaRealFn?.error ?? null,
+      viaRealFn1Count: viaRealFn1?.data?.length ?? null,
+      viaRealFn1Error: viaRealFn1?.error ?? null,
+      viaRealFn2Count: viaRealFn2?.data?.length ?? null,
+      viaRealFn2Error: viaRealFn2?.error ?? null,
+      timingMsFn1: t1 - t0,
+      timingMsFn2: t2 - t1,
+      explainPlan: explainRows[0]?.["QUERY PLAN"] ?? null,
     },
     {
       headers: { "Cache-Control": "no-store" },
