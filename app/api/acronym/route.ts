@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { ACRONYM_CATEGORIES, type AcronymCategory } from "@/lib/types";
 import { insertAcronyms } from "@/lib/db-server";
@@ -74,12 +75,34 @@ function normalizeCategory(category: string): AcronymCategory {
   return "その他";
 }
 
+// クエリ文字列は常にstringなので、真とみなす値をここで明示的に決める
+// ("1"/"true"、大文字小文字・前後空白は許容。それ以外はすべて偽)。
+// bodyのdryRunはbooleanのtrueのみを真とみなす（詳細: decisions.md）。
+const DRY_RUN_TRUE_QUERY_VALUES = new Set(["1", "true"]);
+
+function isDryRunRequested(
+  body: Record<string, unknown>,
+  searchParams: URLSearchParams
+): boolean {
+  if (body.dryRun === true) {
+    return true;
+  }
+
+  const queryValue = searchParams.get("dryRun");
+
+  return (
+    queryValue !== null &&
+    DRY_RUN_TRUE_QUERY_VALUES.has(queryValue.trim().toLowerCase())
+  );
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     // 大文字を1文字も含まない入力（bbs/seo等）のみ全大文字化する。
     // TOCfE/IoT/mRNAのような大小混在表記はそのままGroqに渡し、保存する
     // （normalizeAcronymCasing参照。decisions.md参照）。
+    const dryRun = isDryRunRequested(body, request.nextUrl.searchParams);
     const acronym = normalizeAcronymCasing(String(body.acronym ?? "").trim());
 
     if (!acronym) {
@@ -207,6 +230,20 @@ export async function POST(request: NextRequest) {
           status: 404,
         }
       );
+    }
+
+    // dryRun時はINSERT自体を発行しない（書き込み経路に到達させない）。
+    // idとcreated_atは実DB行が存在しないため、それらを要求する
+    // Acronym型の形を保つ目的でのみここで仮生成する（実在するIDではない）。
+    if (dryRun) {
+      const preview = insertData.map((row) => ({
+        id: randomUUID(),
+        ...row,
+        created_at: new Date().toISOString(),
+        dryRun: true,
+      }));
+
+      return NextResponse.json(preview);
     }
 
     const { data, error } = await insertAcronyms(insertData);
