@@ -1,6 +1,6 @@
 # 実装状態サマリ
 
-最終更新: 2026-08-21
+最終更新: 2026-08-23
 
 このファイルの目的: 別セッション・別ツール（他のAIエージェント含む）が
 このリポジトリで作業を再開する際、既存実装を把握せずに重複実装や
@@ -19,12 +19,14 @@
 ```
 app/
   layout.tsx              ルートレイアウト。manifest参照・メタタグ
-  page.tsx                 唯一の画面。検索UI・AI調査・手動登録すべてここ
+  page.tsx                 検索UI・AI調査・手動登録。/reverseへの導線リンクあり
+  reverse/page.tsx          逆引き（頭文字インデックス）画面。Server Componentのみ
   api/search/route.ts       GET /api/search?q= 検索
   api/acronym/route.ts      POST /api/acronym AI調査+一括登録
   api/acronym/manual/route.ts POST /api/acronym/manual 手動登録(1件)
 lib/
-  db-server.ts              Neon接続、検索/INSERTクエリ
+  db-server.ts              Neon接続、検索/INSERT/逆引きクエリ
+  reverse-index.ts          逆引き画面のキー正規化・並び替え・選択解決
   types.ts                  Acronym型、カテゴリ定義
 public/
   manifest.json              PWAマニフェスト
@@ -132,6 +134,35 @@ db/
 - 詳細にはWikipedia検索リンク・Google検索リンクを表示。
   リンクURLはDBに保存せず、`full_spelling`/`acronym`から
   都度クライアント側で組み立てる（decisions.md 6章）
+
+### 逆引き（頭文字インデックス）画面（2026-08-23実装）
+- ルート: `GET /reverse`（`?key=`で選択キーを渡す。Server Component
+  のみ、`useSearchParams`は未使用。状態はURLクエリパラメータのみ）
+- キー分類式`ACRONYM_INDEX_KEY_EXPR`（`lib/db-server.ts`）が
+  唯一の定義箇所。集計（`getAcronymIndexCounts`）・一覧
+  （`getAcronymsByIndexKey`）の両クエリがこれだけを参照する
+- 分類ルール: 前後空白（半角・全角U+3000・NBSP U+00A0・タブ・改行）
+  を除去後の先頭1文字を大文字化し、A-Zは単独キー、0-9は`'0-9'`
+  に集約、それ以外（記号・全角文字・空文字化するレコード等）は
+  `'#'`に集約。NULL/空文字は集計・一覧の両方から除外
+- 一覧の絞り込みはLIKEではなく`ACRONYM_INDEX_KEY_EXPR`との等値比較
+  （3章参照）。並び順はアクロニムの大文字化・トリム後の昇順＋
+  `full_spelling`・`id`のタイブレーカー
+- インデックスバーの表示順（'0-9'→'A'〜'Z'→'#'）はSQLの
+  `ORDER BY`ではなく`lib/reverse-index.ts`の`sortIndexKeyCounts`
+  がアプリ側で固定する（DB collation非依存）
+- キー選択の妥当性判定・レコード集合の解決は
+  `lib/reverse-index.ts`の`resolveIndexSelection`1箇所に閉じ込め。
+  不正・未指定キーは404にせず「上のキーを選んでください」表示
+- 集計クエリと一覧クエリは並列に取得（キーの妥当性確定前から
+  一覧クエリも投げておき、確定後に描画へ使うか判断する）。
+  一覧部分は`<Suspense key={selectedKey}>`で包み、キー切替時に
+  再サスペンドするようにしている
+- 各レコードの「詳細を見る」は独立した詳細ルートではなく、既存の
+  `?q=`ディープリンク機構（`app/page.tsx`、9章）へのリンク
+  （`/?q=<acronym>`）を再利用している（詳細: decisions.md 17章）
+- 2文字目以降での絞り込み・あいまい検索・ページネーションは
+  未実装（YAGNI、TODO.md参照）
 
 ## PWA化の状態
 
