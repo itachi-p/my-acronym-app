@@ -8,6 +8,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
+import Link from "next/link";
 import {
   ACRONYM_CATEGORIES,
   CATEGORIES,
@@ -332,7 +333,15 @@ export default function Home() {
       )}
 
       <div className="mx-auto max-w-lg px-4 py-6">
-        <h1 className="mb-1 text-2xl font-bold">Acronym Finder</h1>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <h1 className="text-2xl font-bold">Acronym Finder</h1>
+          <Link
+            href="/reverse"
+            className="text-sm text-indigo-600 hover:underline dark:text-indigo-400"
+          >
+            🔤 頭文字から探す
+          </Link>
+        </div>
 
         <p className="mb-5 text-sm text-slate-500">
           英略語の正式名称と意味を検索
