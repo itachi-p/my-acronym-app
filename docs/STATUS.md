@@ -1,6 +1,6 @@
 # 実装状態サマリ
 
-最終更新: 2026-08-23
+最終更新: 2026-08-24
 
 このファイルの目的: 別セッション・別ツール（他のAIエージェント含む）が
 このリポジトリで作業を再開する際、既存実装を把握せずに重複実装や
@@ -20,22 +20,26 @@
 app/
   layout.tsx              ルートレイアウト。manifest参照・メタタグ
   page.tsx                 検索UI・AI調査・手動登録。/reverseへの導線リンクあり
-  reverse/page.tsx          逆引き（頭文字インデックス）画面。Server Componentのみ
+  reverse/page.tsx          逆引き（頭文字インデックス）画面。データ取得はServer Component
+  reverse/ResultBrowser.tsx 逆引き結果の一覧→タップ展開UI（Client Component、2026-08-24）
   api/search/route.ts       GET /api/search?q= 検索
   api/acronym/route.ts      POST /api/acronym AI調査+一括登録
   api/acronym/manual/route.ts POST /api/acronym/manual 手動登録(1件)
 lib/
   db-server.ts              Neon接続、検索/INSERT/逆引きクエリ
   reverse-index.ts          逆引き画面のキー正規化・並び替え・選択解決
-  types.ts                  Acronym型、カテゴリ定義
+  types.ts                  Acronym型、カテゴリ定義（現状の唯一のカテゴリ定義箇所）
 public/
   manifest.json              PWAマニフェスト
   icons/icon-192.png, icon-512.png
 docs/
   decisions.md               設計判断の経緯（why中心）
   TODO.md                    未着手タスク
+  proposals/category-taxonomy.md  カテゴリのタグ方式移行案（未確定、提案段階）
 db/
-  schema.sql / seed.sql      DBスキーマ・シードデータ（Neon復元用、実行時には読まれない）
+  schema.sql                 手書きDDL（Neon復元用、実行時には読まれない。tags/acronym_tagsは未反映で古い）
+  schema-snapshot.txt        Neon本番DBからの機械出力スナップショット（生成物、手編集禁止。DBの正）
+  seed.sql                   シードデータ
 ```
 
 ## 機能別の実装状態
@@ -135,9 +139,17 @@ db/
   リンクURLはDBに保存せず、`full_spelling`/`acronym`から
   都度クライアント側で組み立てる（decisions.md 6章）
 
-### 逆引き（頭文字インデックス）画面（2026-08-23実装）
-- ルート: `GET /reverse`（`?key=`で選択キーを渡す。Server Component
-  のみ、`useSearchParams`は未使用。状態はURLクエリパラメータのみ）
+### 逆引き（頭文字インデックス）画面（2026-08-23実装、2026-08-24改訂）
+- ルート: `GET /reverse`（`?key=`で選択キーを渡す。データ取得・
+  検索パラメータの解決はServer Component、`useSearchParams`は未使用。
+  状態はURLクエリパラメータのみ）
+- 結果一覧は`app/reverse/ResultBrowser.tsx`（Client Component）が
+  担当。略語名＋日本語訳のみのコンパクトな行を並べ、タップした
+  1件だけをその場に展開するアコーディオン方式（常に開くのは最大
+  1件）。登録件数が増えても縦スクロールが長くなりすぎないための
+  変更（詳細: decisions.md 18章）。ページ自体がServer Componentの
+  みという17章の記述は、この一覧部分に限りClient Componentへ変更
+  されている（データ取得自体は従来どおりServer Componentが担う）
 - キー分類式`ACRONYM_INDEX_KEY_EXPR`（`lib/db-server.ts`）が
   唯一の定義箇所。集計（`getAcronymIndexCounts`）・一覧
   （`getAcronymsByIndexKey`）の両クエリがこれだけを参照する
@@ -164,6 +176,32 @@ db/
 - 2文字目以降での絞り込み・あいまい検索・ページネーションは
   未実装（YAGNI、TODO.md参照）
 
+### カテゴリ / タグの実装状態（2026-08-24調査）
+
+- アプリは現状**すべて`acronyms.category`（text + CHECK制約6値）
+  だけを見て動作している**。カテゴリ6値の唯一の定義箇所は
+  `lib/types.ts`の`CATEGORIES`配列（1-9行目）。`AcronymCategory`型・
+  `ACRONYM_CATEGORIES`・`CATEGORY_DISPLAY_NAMES`はすべてここから
+  導出され、UIのカテゴリタブ（`app/page.tsx:369-381`）、Groqへの
+  プロンプト埋め込み（`app/api/acronym/route.ts:63-65`）、AI結果の
+  正規化（同ファイル`normalizeCategory`, 70-76行目、不正値は
+  黙って「その他」にフォールバック）、手動登録のバリデーション
+  （`app/api/acronym/manual/route.ts:30`, 不正値は400エラー）が
+  すべてこの1箇所を参照している。zod等のスキーマバリデーション
+  ライブラリは未導入で、素のTS配列比較のみで検証している
+- 本番DBには`tags`/`acronym_tags`テーブルが**運用者により追加済み**
+  （現行6カテゴリと同名のタグ6件、既存130件全件にis_primaryタグ
+  1件ずつ紐付け済み）。ただし**アプリケーションコードはこれらを
+  一切参照していない**（追加のみで未使用）。移行案は
+  `docs/proposals/category-taxonomy.md`を参照
+- 検索（`GET /api/search`→`searchAcronyms`）はカテゴリで絞り込んで
+  いない（`lower(acronym)`前方一致のみ）。カテゴリタブは取得済み
+  `results`をクライアント側で絞り込むフィルタに過ぎないため、
+  「その他」カテゴリのレコードも通常の略語検索・`/reverse`の
+  どちらからも他カテゴリと同様に到達できる（検索結果を絞り込む
+  経路としてのみカテゴリボタンが機能し、カテゴリボタン経由でしか
+  到達できないレコードは存在しない）
+
 ## PWA化の状態
 
 - `public/manifest.json` あり: name/short_name/icons(192・512)/
@@ -179,6 +217,65 @@ db/
 - `manifest.json` に `share_target` はない。
   iOS Safariでは`share_target`自体が機能しないため意図的に未実装
   （TODO.md「アプリ外からの入口整備」参照）
+
+## DBスキーマの同期（2026-08-24）
+
+- `db/schema-snapshot.txt`が**DBの正**。Neon本番DB
+  （プロジェクト my-acronym-app / branch: production / database:
+  neondb）から機械的に出力したカラム・制約・インデックスの一覧で、
+  **生成物のため人間もCodeも手編集しない**
+- `db/schema.sql`は手書きのDDL（初期構築用）で、`tags`/
+  `acronym_tags`テーブルが未反映のまま古くなっている
+  （差分は下記「スナップショットとschema.sqlの差分」参照）。
+  `schema.sql`を書き換えて追従させる作業は今回のスコープ外とし、
+  差分の報告に留めている。書き換える場合は運用者の判断を仰ぐこと
+- リポジトリと実DBの内容が食い違う場合は`schema-snapshot.txt`
+  （＝実DB）を正とし、リポジトリ側を古いとみなすこと
+
+### スナップショットとschema.sqlの差分（2026-08-24時点）
+
+- `tags`テーブル全体が`schema.sql`に存在しない
+  （id/name/display_group/sort_order/is_active/created_at）
+- `acronym_tags`テーブル全体が`schema.sql`に存在しない
+  （acronym_id/tag_id/is_primary/created_at、FK制約2件、
+  PRIMARY KEY、部分UNIQUEインデックス`acronym_tags_one_primary`、
+  `idx_acronym_tags_tag_id`）
+- `acronyms`テーブル自体（カラム・`acronyms_category_check`・
+  `acronyms_acronym_full_spelling_ci_unique`・
+  `idx_acronyms_acronym_prefix`）は両者で一致しており差分なし
+
+### スナップショットの再取得手順
+
+DBを変更した際は、Neonコンソール（またはpsql）で以下3クエリを
+この順に実行し、出力を結合して`db/schema-snapshot.txt`を上書きする
+（現行ファイルもこの3クエリに相当する内容で構成されている）。
+
+```sql
+-- (1) カラム一覧
+SELECT table_name || '.' || column_name || ' : ' || data_type ||
+       ' NULL=' || is_nullable ||
+       ' DEFAULT=' || COALESCE(column_default, '-') AS line
+FROM information_schema.columns
+WHERE table_schema = 'public'
+ORDER BY table_name, column_name;
+
+-- (2) 制約一覧
+SELECT conrelid::regclass::text || ' CONSTRAINT ' || conname ||
+       ' : ' || pg_get_constraintdef(oid) AS line
+FROM pg_constraint
+WHERE connamespace = 'public'::regnamespace
+ORDER BY conrelid::regclass::text, conname;
+
+-- (3) インデックス一覧
+SELECT tablename || ' INDEX ' || indexname || ' : ' || indexdef AS line
+FROM pg_indexes
+WHERE schemaname = 'public'
+ORDER BY tablename, indexname;
+```
+
+（このリポジトリでは.envの値を要するDB接続をCode側からは
+行わない方針のため、実行と`db/schema-snapshot.txt`への反映は
+運用者が行うこと）
 
 ## 既知の制約
 
