@@ -10,7 +10,7 @@ import {
   resolveIndexSelection,
   sortIndexKeyCounts,
 } from "@/lib/reverse-index";
-import type { Acronym } from "@/lib/types";
+import { ResultBrowser } from "./ResultBrowser";
 
 // searchParamsを読むページはNext.jsが自動的に動的レンダリングにするが、
 // 意図を明示し将来の変更で静的化されることを防ぐため明示しておく
@@ -46,26 +46,6 @@ function IndexBar({
   );
 }
 
-function ResultItem({ item }: { item: Acronym }) {
-  return (
-    <div className="rounded-xl border-2 border-slate-300 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-800">
-      <div className="font-bold text-indigo-700 dark:text-indigo-300">
-        {item.acronym}
-      </div>
-      <div className="text-sm text-slate-500">{item.full_spelling}</div>
-      <p className="mt-1 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-        {item.description}
-      </p>
-      <Link
-        href={`/?q=${encodeURIComponent(item.acronym)}`}
-        className="mt-2 inline-block text-sm text-indigo-600 hover:underline dark:text-indigo-400"
-      >
-        詳細を見る →
-      </Link>
-    </div>
-  );
-}
-
 async function ResultList({
   promise,
 }: {
@@ -84,13 +64,7 @@ async function ResultList({
     return <p className="text-sm text-slate-500">該当なし</p>;
   }
 
-  return (
-    <div className="space-y-3">
-      {data.map((item) => (
-        <ResultItem key={item.id} item={item} />
-      ))}
-    </div>
-  );
+  return <ResultBrowser items={data} />;
 }
 
 export default async function ReverseIndexPage({
