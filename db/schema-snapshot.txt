@@ -1,0 +1,97 @@
+[{
+  "line": "acronym_tags.acronym_id : uuid NULL=NO DEFAULT=-"
+}, {
+  "line": "acronym_tags.created_at : timestamp with time zone NULL=NO DEFAULT=now()"
+}, {
+  "line": "acronym_tags.is_primary : boolean NULL=NO DEFAULT=false"
+}, {
+  "line": "acronym_tags.tag_id : uuid NULL=NO DEFAULT=-"
+}, {
+  "line": "acronyms.acronym : text NULL=NO DEFAULT=-"
+}, {
+  "line": "acronyms.category : text NULL=NO DEFAULT=-"
+}, {
+  "line": "acronyms.created_at : timestamp with time zone NULL=NO DEFAULT=now()"
+}, {
+  "line": "acronyms.description : text NULL=NO DEFAULT=-"
+}, {
+  "line": "acronyms.full_spelling : text NULL=NO DEFAULT=-"
+}, {
+  "line": "acronyms.id : uuid NULL=NO DEFAULT=gen_random_uuid()"
+}, {
+  "line": "acronyms.japanese_translation : text NULL=NO DEFAULT=-"
+}, {
+  "line": "tags.created_at : timestamp with time zone NULL=NO DEFAULT=now()"
+}, {
+  "line": "tags.display_group : text NULL=YES DEFAULT=-"
+}, {
+  "line": "tags.id : uuid NULL=NO DEFAULT=gen_random_uuid()"
+}, {
+  "line": "tags.is_active : boolean NULL=NO DEFAULT=true"
+}, {
+  "line": "tags.name : text NULL=NO DEFAULT=-"
+}, {
+  "line": "tags.sort_order : integer NULL=NO DEFAULT=100"
+}, {
+  "line": "acronym_tags CONSTRAINT acronym_tags_acronym_id_fkey : FOREIGN KEY (acronym_id) REFERENCES acronyms(id) ON DELETE CASCADE"
+}, {
+  "line": "acronym_tags CONSTRAINT acronym_tags_acronym_id_not_null : NOT NULL acronym_id"
+}, {
+  "line": "acronym_tags CONSTRAINT acronym_tags_created_at_not_null : NOT NULL created_at"
+}, {
+  "line": "acronym_tags CONSTRAINT acronym_tags_is_primary_not_null : NOT NULL is_primary"
+}, {
+  "line": "acronym_tags CONSTRAINT acronym_tags_pkey : PRIMARY KEY (acronym_id, tag_id)"
+}, {
+  "line": "acronym_tags CONSTRAINT acronym_tags_tag_id_fkey : FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE RESTRICT"
+}, {
+  "line": "acronym_tags CONSTRAINT acronym_tags_tag_id_not_null : NOT NULL tag_id"
+}, {
+  "line": "acronyms CONSTRAINT acronyms_acronym_not_null : NOT NULL acronym"
+}, {
+  "line": "acronyms CONSTRAINT acronyms_category_check : CHECK ((category = ANY (ARRAY['ビジネス・経営'::text, '金融・株式'::text, '政治・行政'::text, '軍事・安全保障'::text, 'IT・テクノロジー'::text, 'その他'::text])))"
+}, {
+  "line": "acronyms CONSTRAINT acronyms_category_not_null : NOT NULL category"
+}, {
+  "line": "acronyms CONSTRAINT acronyms_created_at_not_null : NOT NULL created_at"
+}, {
+  "line": "acronyms CONSTRAINT acronyms_description_not_null : NOT NULL description"
+}, {
+  "line": "acronyms CONSTRAINT acronyms_full_spelling_not_null : NOT NULL full_spelling"
+}, {
+  "line": "acronyms CONSTRAINT acronyms_id_not_null : NOT NULL id"
+}, {
+  "line": "acronyms CONSTRAINT acronyms_japanese_translation_not_null : NOT NULL japanese_translation"
+}, {
+  "line": "acronyms CONSTRAINT acronyms_pkey : PRIMARY KEY (id)"
+}, {
+  "line": "tags CONSTRAINT tags_created_at_not_null : NOT NULL created_at"
+}, {
+  "line": "tags CONSTRAINT tags_id_not_null : NOT NULL id"
+}, {
+  "line": "tags CONSTRAINT tags_is_active_not_null : NOT NULL is_active"
+}, {
+  "line": "tags CONSTRAINT tags_name_key : UNIQUE (name)"
+}, {
+  "line": "tags CONSTRAINT tags_name_not_null : NOT NULL name"
+}, {
+  "line": "tags CONSTRAINT tags_pkey : PRIMARY KEY (id)"
+}, {
+  "line": "tags CONSTRAINT tags_sort_order_not_null : NOT NULL sort_order"
+}, {
+  "line": "acronym_tags INDEX acronym_tags_one_primary : CREATE UNIQUE INDEX acronym_tags_one_primary ON public.acronym_tags USING btree (acronym_id) WHERE is_primary"
+}, {
+  "line": "acronym_tags INDEX acronym_tags_pkey : CREATE UNIQUE INDEX acronym_tags_pkey ON public.acronym_tags USING btree (acronym_id, tag_id)"
+}, {
+  "line": "acronym_tags INDEX idx_acronym_tags_tag_id : CREATE INDEX idx_acronym_tags_tag_id ON public.acronym_tags USING btree (tag_id)"
+}, {
+  "line": "acronyms INDEX acronyms_acronym_full_spelling_ci_unique : CREATE UNIQUE INDEX acronyms_acronym_full_spelling_ci_unique ON public.acronyms USING btree (lower(acronym), lower(full_spelling))"
+}, {
+  "line": "acronyms INDEX acronyms_pkey : CREATE UNIQUE INDEX acronyms_pkey ON public.acronyms USING btree (id)"
+}, {
+  "line": "acronyms INDEX idx_acronyms_acronym_prefix : CREATE INDEX idx_acronyms_acronym_prefix ON public.acronyms USING btree (lower(acronym) text_pattern_ops)"
+}, {
+  "line": "tags INDEX tags_name_key : CREATE UNIQUE INDEX tags_name_key ON public.tags USING btree (name)"
+}, {
+  "line": "tags INDEX tags_pkey : CREATE UNIQUE INDEX tags_pkey ON public.tags USING btree (id)"
+}]
