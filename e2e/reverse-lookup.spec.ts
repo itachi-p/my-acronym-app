@@ -18,7 +18,8 @@ async function getBadges(page: Page): Promise<Badge[]> {
     const countText = await link
       .locator('span[class="ml-1 text-xs opacity-70"]')
       .innerText();
-    badges.push({ key, count: Number(countText.trim()) });
+    // 件数は"[3]"のように[]で囲んで表示するため、数字部分だけを抽出する。
+    badges.push({ key, count: Number(countText.trim().replace(/[[\]]/g, "")) });
   }
   return badges;
 }

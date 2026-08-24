@@ -39,7 +39,7 @@ function IndexBar({
           }
         >
           {c.key}
-          <span className="ml-1 text-xs opacity-70">{c.count}</span>
+          <span className="ml-1 text-xs opacity-70">[{c.count}]</span>
         </Link>
       ))}
     </div>
@@ -128,9 +128,9 @@ export default async function ReverseIndexPage({
   return (
     <main className="min-h-dvh bg-gradient-to-b from-indigo-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       <div className="mx-auto max-w-lg px-4 py-6">
-        <h1 className="mb-1 text-2xl font-bold">頭文字から探す</h1>
+        <h1 className="mb-1 text-2xl font-bold">逆引き辞典</h1>
         <p className="mb-5 text-sm text-slate-500">
-          アクロニムの先頭文字を選ぶと一覧が表示されます
+          アクロニムの先頭文字を選ぶと一覧が表示されます（[ ]内は登録件数）
         </p>
 
         <IndexBar counts={counts} selectedKey={selectedKey} />
