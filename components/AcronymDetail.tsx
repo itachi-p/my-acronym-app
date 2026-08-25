@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import type { AcronymRelated, AcronymTag } from "@/lib/types";
 
 // 主タグ・副タグをまとめてピル表示する。主タグは塗りつぶし、
@@ -35,7 +34,21 @@ const linkClassName =
 // 詳細表示を開いた時点でホモニム(同義語衝突)と概念的関連の両方を
 // 単一エンドポイントから取得する。両方0件ならセクション自体を
 // 非表示にする。idが変わるたびに取り直す。
-export function RelatedTerms({ id }: { id: string }) {
+//
+// リンクをNext.jsのページ遷移(<Link href="/?id=...">)にしないこと。
+// 外部から?id=で直接開くディープリンク経路とは別に保つため、
+// クリック時は呼び出し側が渡すonNavigateコールバックを呼ぶだけに
+// とどめる。呼び出し側(検索画面/逆引き画面それぞれ)が「現在の画面は
+// そのまま、詳細の中身だけをその場で差し替える」処理を持つことで、
+// /reverseから辿った場合に背後の逆引き一覧が検索画面へ置き換わって
+// しまう問題を避ける(2026-08-26修正)。
+export function RelatedTerms({
+  id,
+  onNavigate,
+}: {
+  id: string;
+  onNavigate: (id: string) => void;
+}) {
   const [data, setData] = useState<AcronymRelated | null>(null);
 
   useEffect(() => {
@@ -72,13 +85,14 @@ export function RelatedTerms({ id }: { id: string }) {
           <p className="text-xs text-slate-500">同じ略語の別の意味</p>
           <div className="mt-1 flex flex-wrap gap-2">
             {data.homonyms.map((homonym) => (
-              <Link
+              <button
+                type="button"
                 key={homonym.id}
-                href={`/?id=${homonym.id}`}
+                onClick={() => onNavigate(homonym.id)}
                 className={linkClassName}
               >
                 {homonym.acronym} = {homonym.full_spelling}
-              </Link>
+              </button>
             ))}
           </div>
         </div>
@@ -89,14 +103,15 @@ export function RelatedTerms({ id }: { id: string }) {
           <p className="text-xs text-slate-500">関連する用語</p>
           <div className="mt-1 flex flex-wrap gap-2">
             {data.relations.map((relation) => (
-              <Link
+              <button
+                type="button"
                 key={relation.id}
-                href={`/?id=${relation.related.id}`}
+                onClick={() => onNavigate(relation.related.id)}
                 className={linkClassName}
               >
                 {relation.related.acronym}
                 {relation.relation_note ? `（${relation.relation_note}）` : ""}
-              </Link>
+              </button>
             ))}
           </div>
         </div>

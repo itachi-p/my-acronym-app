@@ -22,7 +22,15 @@ import { RelatedTerms, TagPills } from "@/components/AcronymDetail";
 
 const MAX_SECONDARY_TAGS = 2;
 
-function DetailCard({ item, onClose }: { item: Acronym; onClose: () => void }) {
+function DetailCard({
+  item,
+  onClose,
+  onNavigate,
+}: {
+  item: Acronym;
+  onClose: () => void;
+  onNavigate: (id: string) => void;
+}) {
   const wikiUrl = `https://ja.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(
     item.full_spelling
   )}`;
@@ -86,7 +94,7 @@ function DetailCard({ item, onClose }: { item: Acronym; onClose: () => void }) {
         </a>
       </div>
 
-      <RelatedTerms id={item.id} />
+      <RelatedTerms id={item.id} onNavigate={onNavigate} />
     </div>
   );
 }
@@ -176,21 +184,36 @@ function HomeContent() {
     }
   }, []);
 
+  // 指定idのレコードを取得し、詳細ポップアップの中身だけを差し替える。
+  // 検索欄・結果一覧(results)には一切触れない。
+  // - 外部からの ?id= ディープリンク起動(下のuseEffect)
+  // - 詳細内の関連用語(ホモニム/概念的関連)クリックによる画面内遷移
+  // の両方がこの関数を経由するが、後者はURLを一切変更しない
+  // (ページ遷移ではなくコールバック呼び出しのみ)。/reverseの
+  // 逆引き一覧が背後で検索画面に置き換わってしまう問題を避けるため、
+  // 画面内遷移は常にこの「その場で中身だけ差し替える」方式に統一する
+  // (2026-08-26修正。以前はRelatedTermsが<Link href="/?id=...">で
+  // 実ページ遷移していたため、/reverseから辿ると背後の逆引き一覧
+  // ごと検索画面に置き換わっていた)。
+  const openDetailById = useCallback((id: string) => {
+    fetch(`/api/acronym/${id}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((item) => {
+        if (item && !item.error) {
+          setSelected(item as Acronym);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
-    // ホモニム・概念的関連リンク(/?id=...)から遷移した場合は、
-    // 検索欄・結果一覧はリセットせず、指定idのレコードを取得して
-    // 詳細ポップアップだけを開く。
+    // ?id= はページ読み込み時点の外部ディープリンク専用の受け口。
+    // 画面内での関連用語遷移はopenDetailByIdを直接呼ぶだけでURLを
+    // 変更しないため、このeffectを再発火させない。
     const id = searchParams.get("id");
 
     if (id) {
-      fetch(`/api/acronym/${id}`)
-        .then((res) => (res.ok ? res.json() : null))
-        .then((item) => {
-          if (item && !item.error) {
-            setSelected(item as Acronym);
-          }
-        })
-        .catch(() => {});
+      openDetailById(id);
       return;
     }
 
@@ -213,7 +236,7 @@ function HomeContent() {
         setSelected(items[0]);
       }
     });
-  }, [searchParams, search]);
+  }, [searchParams, search, openDetailById]);
 
   const handleChange = (value: string) => {
     // 入力の強制大文字化はしない。TOCfE (Theory of Constraints for
@@ -394,7 +417,11 @@ function HomeContent() {
           onClick={() => setSelected(null)}
         >
           <div className="w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
-            <DetailCard item={selected} onClose={() => setSelected(null)} />
+            <DetailCard
+              item={selected}
+              onClose={() => setSelected(null)}
+              onNavigate={openDetailById}
+            />
           </div>
         </div>
       )}
