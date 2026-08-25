@@ -3,11 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { Acronym } from "@/lib/types";
+import { RelatedTerms, TagPills } from "@/components/AcronymDetail";
 
 function DetailPanel({ item }: { item: Acronym }) {
   return (
     <div className="mt-2 rounded-xl border-2 border-indigo-200 bg-white p-4 dark:border-indigo-800/40 dark:bg-slate-900">
       <div className="text-sm text-slate-500">{item.full_spelling}</div>
+
+      <div className="mt-2">
+        <TagPills tags={item.tags} />
+      </div>
 
       <dl className="mt-2 space-y-2">
         <div>
@@ -31,6 +36,8 @@ function DetailPanel({ item }: { item: Acronym }) {
       >
         検索画面で開く →
       </Link>
+
+      <RelatedTerms id={item.id} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Suspense,
   useCallback,
   useEffect,
   useRef,
@@ -9,14 +10,17 @@ import {
   type KeyboardEvent,
 } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
-  ACRONYM_CATEGORIES,
-  CATEGORIES,
-  CATEGORY_DISPLAY_NAMES,
+  ALL_DISPLAY_GROUP,
+  getPrimaryTag,
   type Acronym,
-  type AcronymCategory,
-  type Category,
+  type DisplayGroup,
+  type Tag,
 } from "@/lib/types";
+import { RelatedTerms, TagPills } from "@/components/AcronymDetail";
+
+const MAX_SECONDARY_TAGS = 2;
 
 function DetailCard({ item, onClose }: { item: Acronym; onClose: () => void }) {
   const wikiUrl = `https://ja.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(
@@ -35,21 +39,18 @@ function DetailCard({ item, onClose }: { item: Acronym; onClose: () => void }) {
           </h2>
           <p className="mt-1 text-sm text-slate-500">{item.full_spelling}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-            {item.category}
-          </span>
-          <button
-            onClick={onClose}
-            aria-label="閉じる"
-            className="rounded-full p-1 text-lg leading-none text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
-          >
-            ✕
-          </button>
-        </div>
+        <button
+          onClick={onClose}
+          aria-label="閉じる"
+          className="shrink-0 rounded-full p-1 text-lg leading-none text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+        >
+          ✕
+        </button>
       </div>
 
-      <dl className="space-y-3">
+      <TagPills tags={item.tags} />
+
+      <dl className="mt-4 space-y-3">
         <div>
           <dt className="text-xs font-semibold text-slate-400">日本語訳</dt>
           <dd className="font-medium text-slate-800 dark:text-slate-200">
@@ -84,33 +85,62 @@ function DetailCard({ item, onClose }: { item: Acronym; onClose: () => void }) {
           Google検索
         </a>
       </div>
+
+      <RelatedTerms id={item.id} />
     </div>
   );
 }
 
-export default function Home() {
+function HomeContent() {
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const isComposingRef = useRef(false);
+  const searchParams = useSearchParams();
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Acronym[]>([]);
   const [selected, setSelected] = useState<Acronym | null>(null);
-  const [category, setCategory] = useState<Category>("すべて");
+  const [selectedGroup, setSelectedGroup] = useState<string>(ALL_DISPLAY_GROUP);
   const [loading, setLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [displayGroups, setDisplayGroups] = useState<DisplayGroup[]>([]);
+
   const [manualFormOpen, setManualFormOpen] = useState(false);
   const [manualFullSpelling, setManualFullSpelling] = useState("");
   const [manualJapanese, setManualJapanese] = useState("");
-  const [manualCategory, setManualCategory] = useState<AcronymCategory>(
-    ACRONYM_CATEGORIES[0]
-  );
+  const [manualPrimaryTag, setManualPrimaryTag] = useState("");
+  const [manualSecondaryTags, setManualSecondaryTags] = useState<string[]>([]);
   const [manualDescription, setManualDescription] = useState("");
   const [manualLoading, setManualLoading] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
+
+  // UIのボタン(表示グループ)とタグ選択肢は tags.display_group /
+  // sort_order から動的に生成する。ハードコードされたカテゴリ配列は
+  // 廃止した(タグを増減してもこのファイルの変更が不要になる)。
+  useEffect(() => {
+    fetch("/api/tags")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json && !json.error) {
+          setTags(json.tags ?? []);
+          setDisplayGroups(json.displayGroups ?? []);
+        }
+      })
+      .catch(() => {
+        // タグ一覧の取得失敗時はボタンが「すべて」のみになるだけで、
+        // 検索自体は継続できるため致命的エラー扱いにしない。
+      });
+  }, []);
+
+  useEffect(() => {
+    if (tags.length > 0 && !manualPrimaryTag) {
+      setManualPrimaryTag(tags[0].name);
+    }
+  }, [tags, manualPrimaryTag]);
 
   const search = useCallback(async (value: string) => {
     if (value.length < 2) {
@@ -147,13 +177,29 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    // ホモニム・概念的関連リンク(/?id=...)から遷移した場合は、
+    // 検索欄・結果一覧はリセットせず、指定idのレコードを取得して
+    // 詳細ポップアップだけを開く。
+    const id = searchParams.get("id");
+
+    if (id) {
+      fetch(`/api/acronym/${id}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((item) => {
+          if (item && !item.error) {
+            setSelected(item as Acronym);
+          }
+        })
+        .catch(() => {});
+      return;
+    }
+
     // iOSショートカット等、URLに ?q=XX を付けて外部起動された場合は
     // その場で検索まで自動で行う(手早く調べるのが目的の起動経路なので、
     // 起動後にもう一度入力させない)。1件だけヒットした場合はそのまま
     // 詳細を開く。通常のブラウザ起動時(qなし)は従来通り入力欄へ
     // フォーカスするだけにする。
-    const params = new URLSearchParams(window.location.search);
-    const q = params.get("q")?.trim();
+    const q = searchParams.get("q")?.trim();
 
     if (!q) {
       inputRef.current?.focus();
@@ -167,7 +213,7 @@ export default function Home() {
         setSelected(items[0]);
       }
     });
-  }, [search]);
+  }, [searchParams, search]);
 
   const handleChange = (value: string) => {
     // 入力の強制大文字化はしない。TOCfE (Theory of Constraints for
@@ -179,12 +225,12 @@ export default function Home() {
     setAiError(null);
     setManualFormOpen(false);
     setManualError(null);
-    // カテゴリタブは前回の検索語に対する絞り込みなので、新しい
-    // 検索語を打ち始めたら「すべて」に戻す。残したままだと、
-    // 例えばITタブを選んだ状態で別の略語を検索した際、バックエンドは
-    // 正しく返しているのに該当カテゴリでないというだけで結果が
-    // 表示されず「検索してもヒットしない」ように見えてしまう。
-    setCategory("すべて");
+    // タブは前回の検索語に対する絞り込みなので、新しい検索語を
+    // 打ち始めたら「すべて」に戻す。残したままだと、例えばITタブを
+    // 選んだ状態で別の略語を検索した際、バックエンドは正しく返して
+    // いるのに該当タブでないというだけで結果が表示されず
+    // 「検索してもヒットしない」ように見えてしまう。
+    setSelectedGroup(ALL_DISPLAY_GROUP);
 
     if (timerRef.current) {
       clearTimeout(timerRef.current);
@@ -235,6 +281,20 @@ export default function Home() {
     }
   };
 
+  const toggleSecondaryTag = (name: string) => {
+    setManualSecondaryTags((prev) => {
+      if (prev.includes(name)) {
+        return prev.filter((n) => n !== name);
+      }
+
+      if (prev.length >= MAX_SECONDARY_TAGS) {
+        return prev;
+      }
+
+      return [...prev, name];
+    });
+  };
+
   const handleManualSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setManualLoading(true);
@@ -250,7 +310,7 @@ export default function Home() {
           acronym: query,
           full_spelling: manualFullSpelling,
           japanese_translation: manualJapanese,
-          category: manualCategory,
+          tags: [manualPrimaryTag, ...manualSecondaryTags],
           description: manualDescription,
         }),
       });
@@ -275,7 +335,8 @@ export default function Home() {
       setManualFormOpen(false);
       setManualFullSpelling("");
       setManualJapanese("");
-      setManualCategory(ACRONYM_CATEGORIES[0]);
+      setManualPrimaryTag(tags[0]?.name ?? "");
+      setManualSecondaryTags([]);
       setManualDescription("");
     } catch (error: unknown) {
       setManualError(error instanceof Error ? error.message : "通信エラー");
@@ -309,9 +370,15 @@ export default function Home() {
   };
 
   const filtered =
-    category === "すべて"
+    selectedGroup === ALL_DISPLAY_GROUP
       ? results
-      : results.filter((item) => item.category === category);
+      : results.filter((item) =>
+          item.tags.some((tag) => tag.display_group === selectedGroup)
+        );
+
+  const secondaryTagCandidates = tags.filter(
+    (tag) => tag.name !== manualPrimaryTag
+  );
 
   return (
     <main className="min-h-dvh bg-gradient-to-b from-indigo-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
@@ -367,39 +434,47 @@ export default function Home() {
         />
 
         <div className="mt-4 flex gap-2 overflow-x-auto">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setCategory(cat)}
-              className={
-                category === cat
-                  ? "whitespace-nowrap rounded-full bg-indigo-600 px-3 py-1 text-sm font-medium text-white transition-all"
-                  : "whitespace-nowrap rounded-full border-2 border-slate-400 bg-white px-3 py-1 text-sm text-slate-700 transition-all hover:border-indigo-400 hover:bg-indigo-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-              }
-            >
-              {CATEGORY_DISPLAY_NAMES[cat]}
-            </button>
-          ))}
+          {[ALL_DISPLAY_GROUP, ...displayGroups.map((g) => g.name)].map(
+            (groupName) => (
+              <button
+                key={groupName}
+                onClick={() => setSelectedGroup(groupName)}
+                className={
+                  selectedGroup === groupName
+                    ? "whitespace-nowrap rounded-full bg-indigo-600 px-3 py-1 text-sm font-medium text-white transition-all"
+                    : "whitespace-nowrap rounded-full border-2 border-slate-400 bg-white px-3 py-1 text-sm text-slate-700 transition-all hover:border-indigo-400 hover:bg-indigo-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                }
+              >
+                {groupName}
+              </button>
+            )
+          )}
         </div>
 
         <div className="mt-5 space-y-3">
           {loading && <p>検索中...</p>}
 
-          {filtered.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setSelected(item)}
-              className="w-full rounded-xl border-2 border-slate-300 bg-slate-50 p-4 text-left transition-all hover:border-indigo-400 hover:bg-indigo-50 hover:shadow-md dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="font-bold text-indigo-700 dark:text-indigo-300">{item.acronym}</div>
-                <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-                  {CATEGORY_DISPLAY_NAMES[item.category]}
-                </span>
-              </div>
-              <div className="text-sm text-slate-700 dark:text-slate-300">{item.japanese_translation}</div>
-            </button>
-          ))}
+          {filtered.map((item) => {
+            const primaryTag = getPrimaryTag(item.tags);
+
+            return (
+              <button
+                key={item.id}
+                onClick={() => setSelected(item)}
+                className="w-full rounded-xl border-2 border-slate-300 bg-slate-50 p-4 text-left transition-all hover:border-indigo-400 hover:bg-indigo-50 hover:shadow-md dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-bold text-indigo-700 dark:text-indigo-300">{item.acronym}</div>
+                  {primaryTag && (
+                    <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+                      {primaryTag.name}
+                    </span>
+                  )}
+                </div>
+                <div className="text-sm text-slate-700 dark:text-slate-300">{item.japanese_translation}</div>
+              </button>
+            );
+          })}
 
           {searchError && <p className="text-red-600">⚠ {searchError}</p>}
 
@@ -464,19 +539,58 @@ export default function Home() {
                   </div>
 
                   <div>
-                    <label className="text-xs font-semibold text-slate-400">カテゴリ</label>
+                    <label className="text-xs font-semibold text-slate-400">主タグ</label>
                     <select
-                      value={manualCategory}
-                      onChange={(e) => setManualCategory(e.target.value as AcronymCategory)}
+                      value={manualPrimaryTag}
+                      onChange={(e) => {
+                        const name = e.target.value;
+                        setManualPrimaryTag(name);
+                        setManualSecondaryTags((prev) =>
+                          prev.filter((n) => n !== name)
+                        );
+                      }}
                       className="mt-1 w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-white"
                     >
-                      {ACRONYM_CATEGORIES.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
+                      {tags.map((tag) => (
+                        <option key={tag.id} value={tag.name}>
+                          {tag.name}（{tag.display_group}）
                         </option>
                       ))}
                     </select>
                   </div>
+
+                  {secondaryTagCandidates.length > 0 && (
+                    <div>
+                      <label className="text-xs font-semibold text-slate-400">
+                        副タグ（任意・最大{MAX_SECONDARY_TAGS}件）
+                      </label>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {secondaryTagCandidates.map((tag) => {
+                          const active = manualSecondaryTags.includes(tag.name);
+
+                          return (
+                            <button
+                              type="button"
+                              key={tag.id}
+                              aria-pressed={active}
+                              onClick={() => toggleSecondaryTag(tag.name)}
+                              disabled={
+                                !active &&
+                                manualSecondaryTags.length >= MAX_SECONDARY_TAGS
+                              }
+                              className={
+                                active
+                                  ? "rounded-full bg-indigo-600 px-3 py-1 text-xs font-medium text-white transition-all"
+                                  : "rounded-full border-2 border-slate-300 bg-white px-3 py-1 text-xs text-slate-600 transition-all hover:border-indigo-400 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
+                              }
+                            >
+                              {tag.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   <div>
                     <label className="text-xs font-semibold text-slate-400">説明</label>
@@ -493,7 +607,7 @@ export default function Home() {
 
                   <button
                     type="submit"
-                    disabled={manualLoading}
+                    disabled={manualLoading || !manualPrimaryTag}
                     className="w-full rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-indigo-700 disabled:opacity-60"
                   >
                     {manualLoading ? "登録中..." : "登録する"}
@@ -519,5 +633,13 @@ export default function Home() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<main className="min-h-dvh bg-gradient-to-b from-indigo-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" />}>
+      <HomeContent />
+    </Suspense>
   );
 }
