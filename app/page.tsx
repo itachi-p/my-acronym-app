@@ -460,7 +460,14 @@ function HomeContent() {
           className="w-full rounded-xl border-2 border-indigo-300 bg-white px-4 py-3 text-lg text-slate-900 placeholder-slate-500 focus:border-indigo-600 focus:outline-none dark:border-indigo-700 dark:bg-slate-800 dark:text-white"
         />
 
-        <div className="mt-4 flex gap-2 overflow-x-auto">
+        {/*
+          表示グループは7個固定ではなく tags.display_group から動的に
+          決まる(将来増減しうる)。overflow-x-auto(横スクロール)だった
+          ものをflex-wrapへ変更し、1行に収まらない分は折り返す。
+          固定のグリッド列数(grid-cols-N)は使わない
+          (グループ数が変わっても崩れない実装にするため)。
+        */}
+        <div className="mt-4 flex flex-wrap gap-2">
           {[ALL_DISPLAY_GROUP, ...displayGroups.map((g) => g.name)].map(
             (groupName) => (
               <button
