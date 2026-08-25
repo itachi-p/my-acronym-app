@@ -1,45 +1,60 @@
-export const CATEGORIES = [
-  "すべて",
-  "ビジネス・経営",
-  "金融・株式",
-  "政治・行政",
-  "軍事・安全保障",
-  "IT・テクノロジー",
-  "その他",
-] as const;
+// UIの「すべて」タブ用センチネル。DBのdisplay_groupには存在しない。
+export const ALL_DISPLAY_GROUP = "すべて";
 
-export type Category = (typeof CATEGORIES)[number];
-export type AcronymCategory = Exclude<Category, "すべて">;
+export interface Tag {
+  id: string;
+  name: string;
+  display_group: string;
+  sort_order: number;
+}
 
-export const ACRONYM_CATEGORIES = CATEGORIES.filter(
-  (category): category is AcronymCategory => category !== "すべて"
-);
+export interface AcronymTag extends Tag {
+  is_primary: boolean;
+}
 
-export const CATEGORY_DISPLAY_NAMES: Record<Category, string> = {
-  "すべて": "すべて",
-  "ビジネス・経営": "経営",
-  "金融・株式": "金融",
-  "政治・行政": "政治",
-  "軍事・安全保障": "軍事",
-  "IT・テクノロジー": "IT",
-  "その他": "その他",
-};
+export interface DisplayGroup {
+  name: string;
+  sort_order: number;
+}
 
 export interface Acronym {
   id: string;
   acronym: string;
   full_spelling: string;
   japanese_translation: string;
-  category: AcronymCategory;
   description: string;
   created_at: string;
+  tags: AcronymTag[];
+}
+
+export function getPrimaryTag(tags: AcronymTag[]): AcronymTag | undefined {
+  return tags.find((tag) => tag.is_primary);
+}
+
+export interface Homonym {
+  id: string;
+  acronym: string;
+  full_spelling: string;
+  japanese_translation: string;
+}
+
+export interface AcronymRelation {
+  id: string;
+  relation_note: string | null;
+  related: Homonym;
+}
+
+export interface AcronymRelated {
+  homonyms: Homonym[];
+  relations: AcronymRelation[];
 }
 
 // AIが返す1つの解釈。同一acronymが複数の意味を持つ場合、
 // これの配列 ({ results: AiAcronymResult[] }) がAPIレスポンスになる。
+// tags[0] が主タグ、残りが副タグ(0〜2件程度)。
 export interface AiAcronymResult {
   full_spelling: string;
   japanese_translation: string;
-  category: AcronymCategory;
+  tags: string[];
   description: string;
 }
