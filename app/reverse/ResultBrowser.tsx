@@ -26,14 +26,14 @@ function DetailBody({
       <dl className="mt-2 space-y-2">
         <div>
           <dt className="text-xs font-semibold text-slate-400">日本語訳</dt>
-          <dd className="font-medium text-slate-800 dark:text-slate-200">
+          <dd className="break-words font-medium text-slate-800 dark:text-slate-200">
             {item.japanese_translation}
           </dd>
         </div>
 
         <div>
           <dt className="text-xs font-semibold text-slate-400">概要</dt>
-          <dd className="leading-relaxed text-slate-700 dark:text-slate-300">
+          <dd className="break-words leading-relaxed text-slate-700 dark:text-slate-300">
             {item.description}
           </dd>
         </div>
@@ -62,7 +62,7 @@ function DetailPanel({
 }) {
   return (
     <div className="mt-2 rounded-xl border-2 border-indigo-200 bg-white p-4 dark:border-indigo-800/40 dark:bg-slate-900">
-      <div className="text-sm text-slate-500">{item.full_spelling}</div>
+      <div className="break-words text-sm text-slate-500">{item.full_spelling}</div>
       <DetailBody item={item} onNavigate={onNavigate} />
     </div>
   );
@@ -87,16 +87,16 @@ function DetailOverlay({
       <div className="w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
         <div className="animate-fade-in rounded-2xl border border-indigo-200/60 bg-white p-5 shadow-xl shadow-indigo-200/60 dark:border-indigo-800/40 dark:bg-slate-900">
           <div className="mb-1 flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
+            <div className="min-w-0">
+              <h2 className="break-words text-3xl font-bold text-indigo-600 dark:text-indigo-400">
                 {item.acronym}
               </h2>
-              <p className="mt-1 text-sm text-slate-500">{item.full_spelling}</p>
+              <p className="mt-1 break-words text-sm text-slate-500">{item.full_spelling}</p>
             </div>
             <button
               onClick={onClose}
               aria-label="閉じる"
-              className="shrink-0 rounded-full p-1 text-lg leading-none text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+              className="shrink-0 rounded-full p-2 text-lg leading-none text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
             >
               ✕
             </button>
@@ -153,6 +153,13 @@ export function ResultBrowser({ items }: { items: Acronym[] }) {
               }
             >
               <div className="flex items-center justify-between gap-2">
+                {/*
+                  このdivのclassは e2e/reverse-lookup.spec.ts が
+                  `div[class="font-bold text-indigo-700 dark:text-indigo-300"]`
+                  で完全一致セレクタとして依存している。break-words等を
+                  追加すると一致しなくなりテストが壊れるため変更しない
+                  (acronym自体は短い文字列のため、折り返し防御の優先度は低い)。
+                */}
                 <div className="font-bold text-indigo-700 dark:text-indigo-300">
                   {item.acronym}
                 </div>
@@ -160,7 +167,7 @@ export function ResultBrowser({ items }: { items: Acronym[] }) {
                   {isOpen ? "▾" : "▸"}
                 </span>
               </div>
-              <div className="text-sm text-slate-700 dark:text-slate-300">
+              <div className="break-words text-sm text-slate-700 dark:text-slate-300">
                 {item.japanese_translation}
               </div>
             </button>

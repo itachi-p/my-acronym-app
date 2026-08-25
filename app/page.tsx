@@ -41,16 +41,16 @@ function DetailCard({
   return (
     <div className="animate-fade-in rounded-2xl border border-indigo-200/60 bg-white p-5 shadow-xl shadow-indigo-200/60 dark:border-indigo-800/40 dark:bg-slate-900">
       <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
+        <div className="min-w-0">
+          <h2 className="break-words text-3xl font-bold text-indigo-600 dark:text-indigo-400">
             {item.acronym}
           </h2>
-          <p className="mt-1 text-sm text-slate-500">{item.full_spelling}</p>
+          <p className="mt-1 break-words text-sm text-slate-500">{item.full_spelling}</p>
         </div>
         <button
           onClick={onClose}
           aria-label="閉じる"
-          className="shrink-0 rounded-full p-1 text-lg leading-none text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+          className="shrink-0 rounded-full p-2 text-lg leading-none text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
         >
           ✕
         </button>
@@ -498,14 +498,14 @@ function HomeContent() {
                 className="w-full rounded-xl border-2 border-slate-300 bg-slate-50 p-4 text-left transition-all hover:border-indigo-400 hover:bg-indigo-50 hover:shadow-md dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="font-bold text-indigo-700 dark:text-indigo-300">{item.acronym}</div>
+                  <div className="min-w-0 break-words font-bold text-indigo-700 dark:text-indigo-300">{item.acronym}</div>
                   {primaryTag && (
                     <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
                       {primaryTag.name}
                     </span>
                   )}
                 </div>
-                <div className="text-sm text-slate-700 dark:text-slate-300">{item.japanese_translation}</div>
+                <div className="break-words text-sm text-slate-700 dark:text-slate-300">{item.japanese_translation}</div>
               </button>
             );
           })}
