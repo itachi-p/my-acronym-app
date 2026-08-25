@@ -1,4 +1,14 @@
 [{
+  "line": "acronym_relations.acronym_id_a : uuid NULL=NO DEFAULT=-"
+}, {
+  "line": "acronym_relations.acronym_id_b : uuid NULL=NO DEFAULT=-"
+}, {
+  "line": "acronym_relations.created_at : timestamp with time zone NULL=NO DEFAULT=now()"
+}, {
+  "line": "acronym_relations.id : uuid NULL=NO DEFAULT=gen_random_uuid()"
+}, {
+  "line": "acronym_relations.relation_note : text NULL=YES DEFAULT=-"
+}, {
   "line": "acronym_tags.acronym_id : uuid NULL=NO DEFAULT=-"
 }, {
   "line": "acronym_tags.created_at : timestamp with time zone NULL=NO DEFAULT=now()"
@@ -33,6 +43,22 @@
 }, {
   "line": "tags.sort_order : integer NULL=NO DEFAULT=100"
 }, {
+  "line": "acronym_relations CONSTRAINT acronym_relations_acronym_id_a_fkey : FOREIGN KEY (acronym_id_a) REFERENCES acronyms(id) ON DELETE CASCADE"
+}, {
+  "line": "acronym_relations CONSTRAINT acronym_relations_acronym_id_a_not_null : NOT NULL acronym_id_a"
+}, {
+  "line": "acronym_relations CONSTRAINT acronym_relations_acronym_id_b_fkey : FOREIGN KEY (acronym_id_b) REFERENCES acronyms(id) ON DELETE CASCADE"
+}, {
+  "line": "acronym_relations CONSTRAINT acronym_relations_acronym_id_b_not_null : NOT NULL acronym_id_b"
+}, {
+  "line": "acronym_relations CONSTRAINT acronym_relations_check : CHECK ((acronym_id_a <> acronym_id_b))"
+}, {
+  "line": "acronym_relations CONSTRAINT acronym_relations_created_at_not_null : NOT NULL created_at"
+}, {
+  "line": "acronym_relations CONSTRAINT acronym_relations_id_not_null : NOT NULL id"
+}, {
+  "line": "acronym_relations CONSTRAINT acronym_relations_pkey : PRIMARY KEY (id)"
+}, {
   "line": "acronym_tags CONSTRAINT acronym_tags_acronym_id_fkey : FOREIGN KEY (acronym_id) REFERENCES acronyms(id) ON DELETE CASCADE"
 }, {
   "line": "acronym_tags CONSTRAINT acronym_tags_acronym_id_not_null : NOT NULL acronym_id"
@@ -48,8 +74,6 @@
   "line": "acronym_tags CONSTRAINT acronym_tags_tag_id_not_null : NOT NULL tag_id"
 }, {
   "line": "acronyms CONSTRAINT acronyms_acronym_not_null : NOT NULL acronym"
-}, {
-  "line": "acronyms CONSTRAINT acronyms_category_check : CHECK ((category = ANY (ARRAY['ビジネス・経営'::text, '金融・株式'::text, '政治・行政'::text, '軍事・安全保障'::text, 'IT・テクノロジー'::text, 'その他'::text])))"
 }, {
   "line": "acronyms CONSTRAINT acronyms_category_not_null : NOT NULL category"
 }, {
@@ -78,6 +102,14 @@
   "line": "tags CONSTRAINT tags_pkey : PRIMARY KEY (id)"
 }, {
   "line": "tags CONSTRAINT tags_sort_order_not_null : NOT NULL sort_order"
+}, {
+  "line": "acronym_relations INDEX acronym_relations_pkey : CREATE UNIQUE INDEX acronym_relations_pkey ON public.acronym_relations USING btree (id)"
+}, {
+  "line": "acronym_relations INDEX acronym_relations_unique_pair : CREATE UNIQUE INDEX acronym_relations_unique_pair ON public.acronym_relations USING btree (LEAST((acronym_id_a)::text, (acronym_id_b)::text), GREATEST((acronym_id_a)::text, (acronym_id_b)::text))"
+}, {
+  "line": "acronym_relations INDEX idx_acronym_relations_a : CREATE INDEX idx_acronym_relations_a ON public.acronym_relations USING btree (acronym_id_a)"
+}, {
+  "line": "acronym_relations INDEX idx_acronym_relations_b : CREATE INDEX idx_acronym_relations_b ON public.acronym_relations USING btree (acronym_id_b)"
 }, {
   "line": "acronym_tags INDEX acronym_tags_one_primary : CREATE UNIQUE INDEX acronym_tags_one_primary ON public.acronym_tags USING btree (acronym_id) WHERE is_primary"
 }, {
