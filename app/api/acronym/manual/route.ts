@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ACRONYM_CATEGORIES, type AcronymCategory } from "@/lib/types";
-import { insertAcronyms } from "@/lib/db-server";
+import { getActiveTags, insertAcronyms } from "@/lib/db-server";
 import { normalizeAcronymCasing } from "@/lib/normalize-acronym";
+
+const MAX_TAGS = 3;
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,8 +14,18 @@ export async function POST(request: NextRequest) {
     const acronym = normalizeAcronymCasing(String(body.acronym ?? "").trim());
     const full_spelling = String(body.full_spelling ?? "").trim();
     const japanese_translation = String(body.japanese_translation ?? "").trim();
-    const category = String(body.category ?? "");
     const description = String(body.description ?? "").trim();
+
+    // tags[0]が主タグ、残りが副タグ。クライアントは主タグ選択+
+    // 副タグ選択(任意)からこの配列を組み立てて送る。
+    const rawTags = Array.isArray(body.tags) ? body.tags : [];
+    const tags = Array.from(
+      new Set(
+        rawTags
+          .map((t: unknown) => (typeof t === "string" ? t.trim() : ""))
+          .filter((t: string) => t !== "")
+      )
+    ).slice(0, MAX_TAGS) as string[];
 
     if (!acronym || !full_spelling || !japanese_translation || !description) {
       return NextResponse.json(
@@ -27,10 +38,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!ACRONYM_CATEGORIES.includes(category as AcronymCategory)) {
+    if (tags.length === 0) {
       return NextResponse.json(
         {
-          error: "カテゴリが不正です",
+          error: "タグを1つ以上選択してください",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const { data: tagRows, error: tagsError } = await getActiveTags();
+
+    if (tagsError || !tagRows) {
+      console.error("[Manual Tags Fetch Error]", tagsError);
+
+      return NextResponse.json(
+        {
+          error: "タグ一覧の取得に失敗しました",
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    const validTagNames = new Set(tagRows.map((t) => t.name));
+    const invalidTag = tags.find((t) => !validTagNames.has(t));
+
+    if (invalidTag) {
+      return NextResponse.json(
+        {
+          error: `タグが不正です: ${invalidTag}`,
         },
         {
           status: 400,
@@ -43,8 +83,8 @@ export async function POST(request: NextRequest) {
         acronym,
         full_spelling,
         japanese_translation,
-        category: category as AcronymCategory,
         description,
+        tags,
       },
     ]);
 
