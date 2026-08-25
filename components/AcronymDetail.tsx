@@ -29,7 +29,7 @@ export function TagPills({ tags }: { tags: AcronymTag[] }) {
 }
 
 const linkClassName =
-  "max-w-full whitespace-normal break-words rounded-lg border border-slate-300 px-2 py-1 text-sm text-slate-700 transition-colors hover:border-indigo-400 hover:text-indigo-600 dark:border-slate-600 dark:text-slate-300 dark:hover:border-indigo-500 dark:hover:text-indigo-400";
+  "max-w-full whitespace-normal break-words rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-700 transition-colors hover:border-indigo-400 hover:text-indigo-600 dark:border-slate-600 dark:text-slate-300 dark:hover:border-indigo-500 dark:hover:text-indigo-400";
 
 // 詳細表示を開いた時点でホモニム(同義語衝突)と概念的関連の両方を
 // 単一エンドポイントから取得する。両方0件ならセクション自体を

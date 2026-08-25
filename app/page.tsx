@@ -61,14 +61,14 @@ function DetailCard({
       <dl className="mt-4 space-y-3">
         <div>
           <dt className="text-xs font-semibold text-slate-400">日本語訳</dt>
-          <dd className="font-medium text-slate-800 dark:text-slate-200">
+          <dd className="break-words font-medium text-slate-800 dark:text-slate-200">
             {item.japanese_translation}
           </dd>
         </div>
 
         <div>
           <dt className="text-xs font-semibold text-slate-400">概要</dt>
-          <dd className="leading-relaxed text-slate-700 dark:text-slate-300">
+          <dd className="break-words leading-relaxed text-slate-700 dark:text-slate-300">
             {item.description}
           </dd>
         </div>
@@ -475,8 +475,8 @@ function HomeContent() {
                 onClick={() => setSelectedGroup(groupName)}
                 className={
                   selectedGroup === groupName
-                    ? "whitespace-nowrap rounded-full bg-indigo-600 px-3 py-1 text-sm font-medium text-white transition-all"
-                    : "whitespace-nowrap rounded-full border-2 border-slate-400 bg-white px-3 py-1 text-sm text-slate-700 transition-all hover:border-indigo-400 hover:bg-indigo-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                    ? "whitespace-nowrap rounded-full bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-all"
+                    : "whitespace-nowrap rounded-full border-2 border-slate-400 bg-white px-3 py-2 text-sm text-slate-700 transition-all hover:border-indigo-400 hover:bg-indigo-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                 }
               >
                 {groupName}
@@ -614,8 +614,8 @@ function HomeContent() {
                               }
                               className={
                                 active
-                                  ? "rounded-full bg-indigo-600 px-3 py-1 text-xs font-medium text-white transition-all"
-                                  : "rounded-full border-2 border-slate-300 bg-white px-3 py-1 text-xs text-slate-600 transition-all hover:border-indigo-400 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
+                                  ? "rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-all"
+                                  : "rounded-full border-2 border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-600 transition-all hover:border-indigo-400 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
                               }
                             >
                               {tag.name}
