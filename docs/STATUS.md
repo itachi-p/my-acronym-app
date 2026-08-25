@@ -247,6 +247,44 @@ db/
   独立した経路。`useSearchParams`使用のためpage.tsxの実体は
   `Suspense`配下の`HomeContent`に分離した）
 
+### レスポンシブ対応（2026-08-26実施）
+
+- 対象幅: 375px（iPhone SE/mini相当）・390px（iPhone標準相当）・
+  768px（タブレット縦）・1280px（PC）。対象画面: トップ（入力検索）・
+  検索結果一覧・逆引き辞書画面（インデックス選択・結果一覧）・
+  詳細表示（タグピル・関連用語含む）・手動登録フォーム
+- 検証方法: Playwrightでdevサーバーを4幅にリサイズし、
+  `document.documentElement.scrollWidth`に加えて
+  `overflow-x:auto/scroll`を持つ要素自身の`scrollWidth`/
+  `clientWidth`差分も走査するアドホックスクリプトで横スクロール
+  発生箇所を客観的に特定した（`document`直下のscrollWidthだけでは
+  「要素自身がoverflow-x-autoで自己完結してスクロールする」ケースを
+  検出できないと判明したため、両方をチェックする方式にした）。
+  タグ3個・関連用語4件・長い正式名称（実DBの`SWIFT`・
+  `USA PATRIOT Act`）は実データ・API応答モックの両方でワースト
+  ケースを再現して検証した
+- **発見した不具合は1箇所のみ**: トップ画面のカテゴリ（表示グループ）
+  ボタン行が`overflow-x-auto`（`flex-wrap`なし）だったため、
+  検証した4幅すべてで内部横スクロールが発生していた（1280pxでも
+  発生。ボタン行は`max-w-lg`コンテナ内にあり実効幅が頭打ちになる
+  ため）。`app/reverse/page.tsx`の`IndexBar`は元々`flex flex-wrap`
+  実装済みで対象外だった
+- 修正: `flex flex-wrap gap-2`へ変更（グリッド列数のハードコードは
+  使わない。理由はdecisions.md 21章）。加えてタップ領域が小さかった
+  インタラクティブ要素（カテゴリボタン・`/reverse`インデックスキー・
+  関連用語ボタン・副タグ選択ボタン・閉じるボタン）のpaddingを拡大し、
+  長文フィールド（正式名称・日本語訳・概要・詳細表示の見出し）に
+  `break-words`（flexコンテキストでは`min-w-0`も）を防御的に追加した
+  （現行の実データでは折り返し自体は元々発生していたため不具合は
+  見つからなかったが、空白を含まない連続文字列への予防措置）
+- `overflow-x: hidden`によるドキュメントレベルでの隠蔽は使っていない
+  （原因箇所を直接修正する方針を徹底）
+- 例外: `app/reverse/ResultBrowser.tsx`のアコーディオン行acronym
+  表示`div`のみ、`e2e/reverse-lookup.spec.ts`が
+  `div[class="font-bold text-indigo-700 dark:text-indigo-300"]`
+  で完全一致セレクタとして依存しているため、`break-words`を
+  追加していない（詳細はdecisions.md 21章）
+
 ## PWA化の状態
 
 - `public/manifest.json` あり: name/short_name/icons(192・512)/
