@@ -1,6 +1,6 @@
 # 実装状態サマリ
 
-最終更新: 2026-08-24
+最終更新: 2026-08-26
 
 このファイルの目的: 別セッション・別ツール（他のAIエージェント含む）が
 このリポジトリで作業を再開する際、既存実装を把握せずに重複実装や
@@ -20,25 +20,33 @@
 app/
   layout.tsx              ルートレイアウト。manifest参照・メタタグ
   page.tsx                 検索UI・AI調査・手動登録。/reverseへの導線リンクあり
+                            (2026-08-26: useSearchParamsで反応的に。Suspense境界必須)
   reverse/page.tsx          逆引き（頭文字インデックス）画面。データ取得はServer Component
   reverse/ResultBrowser.tsx 逆引き結果の一覧→タップ展開UI（Client Component、2026-08-24）
-  api/search/route.ts       GET /api/search?q= 検索
-  api/acronym/route.ts      POST /api/acronym AI調査+一括登録
-  api/acronym/manual/route.ts POST /api/acronym/manual 手動登録(1件)
+  api/search/route.ts       GET /api/search?q= 検索（タグ同梱、2026-08-26）
+  api/acronym/route.ts      POST /api/acronym AI調査+一括登録（複数タグ対応、2026-08-26）
+  api/acronym/manual/route.ts POST /api/acronym/manual 手動登録(1件、複数タグ対応)
+  api/acronym/[id]/route.ts    GET 単一レコード取得（タグ同梱。関連リンク遷移用、2026-08-26新設）
+  api/acronym/[id]/related/route.ts GET ホモニム+概念的関連の取得（2026-08-26新設）
+  api/tags/route.ts         GET タグ一覧+表示グループ一覧（2026-08-26新設）
+components/
+  AcronymDetail.tsx          TagPills（複数タグ表示）・RelatedTerms（関連用語）。
+                            page.tsx / reverse/ResultBrowser.tsx で共有（2026-08-26新設）
 lib/
-  db-server.ts              Neon接続、検索/INSERT/逆引きクエリ
+  db-server.ts              Neon接続、検索/INSERT/逆引き/タグ/関連用語クエリ
   reverse-index.ts          逆引き画面のキー正規化・並び替え・選択解決
-  types.ts                  Acronym型、カテゴリ定義（現状の唯一のカテゴリ定義箇所）
+  types.ts                  Acronym/Tag/AcronymTag/DisplayGroup/Homonym/AcronymRelation型
 public/
   manifest.json              PWAマニフェスト
   icons/icon-192.png, icon-512.png
 docs/
   decisions.md               設計判断の経緯（why中心）
   TODO.md                    未着手タスク
-  proposals/category-taxonomy.md  カテゴリのタグ方式移行案（未確定、提案段階）
+  proposals/category-taxonomy.md  カテゴリのタグ方式移行案（提案段階のまま。実装は本移行で反映済み）
 db/
-  schema.sql                 手書きDDL（Neon復元用、実行時には読まれない。tags/acronym_tagsは未反映で古い）
-  schema-snapshot.txt        Neon本番DBからの機械出力スナップショット（生成物、手編集禁止。DBの正）
+  schema.sql                 手書きDDL（Neon復元用、実行時には読まれない。tags/acronym_tags/acronym_relationsは未反映で古い）
+  schema-snapshot.txt        Neon本番DBからの機械出力スナップショット（生成物、手編集禁止。DBの正。
+                            2026-08-26時点でも取得済みなのはcategory列削除前の状態。再取得は運用者作業）
   seed.sql                   シードデータ
 ```
 
@@ -122,12 +130,19 @@ db/
   （UNIQUEインデックス、検索LIKE句とも）。この部分は今回変更していない
 - 詳細: decisions.md 12章
 
-### `?q=` ディープリンク起動
-- `app/page.tsx` の起動時`useEffect`で `window.location.search`
-  から `q` を読む
-- `q`なし: 通常通り入力欄へフォーカスするのみ（挙動変更なし）
-- `q`あり: `setQuery(q)` の上で即座に検索を実行。1件ヒットなら
-  詳細（`selected`）を自動オープン
+### `?q=` / `?id=` ディープリンク起動（2026-08-26: `?id=`追加）
+- `app/page.tsx` の実体は`HomeContent`（`Suspense`配下）に分離し、
+  `next/navigation`の`useSearchParams()`で`q`/`id`を**反応的に**
+  監視する（`window.location.search`の1回読みから変更）。理由:
+  ホモニム・概念的関連リンク（`/?id=<uuid>`）は同一ルートへの
+  クライアント遷移のため、マウント時1回きりの読み取りだと2件目
+  以降のリンククリックに反応できなかった
+- `id`あり: `GET /api/acronym/[id]`で1件取得し、詳細
+  （`selected`）を開く。検索欄・検索結果はリセットしない
+  （関連リンクからの遷移で背後の検索状態を保つため）
+- `id`なし・`q`あり: `setQuery(q)` の上で即座に検索を実行。
+  1件ヒットなら詳細を自動オープン（従来通り）
+- 両方なし: 通常通り入力欄へフォーカスするのみ（挙動変更なし）
 - 外部入口（ショートカット・共有シート・ブックマーク等）の
   **共通の受け口**として設計。入口ごとの個別実装は不要
   （decisions.md 9章）
@@ -138,6 +153,9 @@ db/
 - 詳細にはWikipedia検索リンク・Google検索リンクを表示。
   リンクURLはDBに保存せず、`full_spelling`/`acronym`から
   都度クライアント側で組み立てる（decisions.md 6章）
+- 2026-08-26: `components/AcronymDetail.tsx`の`TagPills`
+  （複数タグ表示）・`RelatedTerms`（ホモニム・概念的関連）を追加。
+  `app/reverse/ResultBrowser.tsx`の`DetailPanel`とも共有
 
 ### 逆引き（頭文字インデックス）画面（2026-08-23実装、2026-08-24改訂）
 - ルート: `GET /reverse`（`?key=`で選択キーを渡す。データ取得・
@@ -176,31 +194,58 @@ db/
 - 2文字目以降での絞り込み・あいまい検索・ページネーションは
   未実装（YAGNI、TODO.md参照）
 
-### カテゴリ / タグの実装状態（2026-08-24調査）
+### カテゴリ / タグの実装状態（2026-08-26改訂: タグ方式へ移行完了）
 
-- アプリは現状**すべて`acronyms.category`（text + CHECK制約6値）
-  だけを見て動作している**。カテゴリ6値の唯一の定義箇所は
-  `lib/types.ts`の`CATEGORIES`配列（1-9行目）。`AcronymCategory`型・
-  `ACRONYM_CATEGORIES`・`CATEGORY_DISPLAY_NAMES`はすべてここから
-  導出され、UIのカテゴリタブ（`app/page.tsx:369-381`）、Groqへの
-  プロンプト埋め込み（`app/api/acronym/route.ts:63-65`）、AI結果の
-  正規化（同ファイル`normalizeCategory`, 70-76行目、不正値は
-  黙って「その他」にフォールバック）、手動登録のバリデーション
-  （`app/api/acronym/manual/route.ts:30`, 不正値は400エラー）が
-  すべてこの1箇所を参照している。zod等のスキーマバリデーション
-  ライブラリは未導入で、素のTS配列比較のみで検証している
-- 本番DBには`tags`/`acronym_tags`テーブルが**運用者により追加済み**
-  （現行6カテゴリと同名のタグ6件、既存130件全件にis_primaryタグ
-  1件ずつ紐付け済み）。ただし**アプリケーションコードはこれらを
-  一切参照していない**（追加のみで未使用）。移行案は
-  `docs/proposals/category-taxonomy.md`を参照
-- 検索（`GET /api/search`→`searchAcronyms`）はカテゴリで絞り込んで
-  いない（`lower(acronym)`前方一致のみ）。カテゴリタブは取得済み
-  `results`をクライアント側で絞り込むフィルタに過ぎないため、
-  「その他」カテゴリのレコードも通常の略語検索・`/reverse`の
-  どちらからも他カテゴリと同様に到達できる（検索結果を絞り込む
-  経路としてのみカテゴリボタンが機能し、カテゴリボタン経由でしか
-  到達できないレコードは存在しない）
+- **分類の読み書きは`tags`/`acronym_tags`へ移行済み**。`acronyms.category`
+  （text、CHECK制約は運用者により削除済み）は**legacyとして残るが
+  読み取りには一切使わず**、新規登録時に主タグの`display_group`を
+  書き込む**二重書き**（暫定措置、`lib/db-server.ts`
+  `insertOneAcronymWithTags`のコメント参照）のみ行う
+- タグは19件の原子タグ（`tags.name`）で構成され、`tags.display_group`
+  により7個の表示グループ（UIボタン）に集約される。ボタン数・並び順
+  は`sort_order`から動的に決まり、コード上のハードコードは無い
+  （`lib/db-server.ts` `getActiveTags`/`getDisplayGroups`、
+  `app/api/tags/route.ts`経由でクライアントへ配信）
+- 1レコードは主タグ1件（`is_primary=true`、部分UNIQUEインデックスで
+  1件に制限）+ 副タグ0〜2件程度を持てる。表示グループでの絞り込みは
+  **主タグ・副タグどちらか一方が一致すればヒット**する
+  （`app/page.tsx`の`filtered`、`item.tags.some(t => t.display_group === selectedGroup)`）
+- 検索（`GET /api/search`→`searchAcronyms`）・逆引き
+  （`getAcronymsByIndexKey`）は`acronym_tags`/`tags`を相関サブクエリで
+  JOINし、各レコードに`tags: AcronymTag[]`をJSON配列として同梱する
+  （`lib/db-server.ts`の`tagsJsonSubquery`。行を複製しないよう
+  相関サブクエリ+`json_agg`を使用し、素朴なJOINは使っていない）
+- Groqへのプロンプト（`app/api/acronym/route.ts` `buildSystemPrompt`）
+  にはタグ名一覧を`getActiveTags()`から動的に埋め込む
+  （ハードコード配列は廃止）。返り値`tags: string[]`は
+  `normalizeTags`で検証し、1つ目を主タグ・以降を副タグ（最大3件）
+  として扱う。既知タグに一致しない場合は「その他」1件にフォール
+  バックする。手動登録（`POST /api/acronym/manual`）も同じタグ
+  一覧に対して検証し、不正なタグ名は400エラーで拒否する
+  （AI経路の黙示フォールバックとは非対称。手動登録は元々この
+  非対称方針だった）
+- `insertAcronyms`（`lib/db-server.ts`）は1件ごとにCTE
+  （`WITH ins AS (INSERT INTO acronyms ...), tag_ins AS (INSERT INTO acronym_tags ...)`）
+  で`acronyms`と`acronym_tags`を単一SQL文でアトミックに書き込む。
+  Neonのサーバーレスドライバが複数文BEGIN/COMMITを扱えないための
+  対応（decisions.md参照）。複数解釈（AI一括登録で最大4件）は
+  この単一行CTEを順に呼ぶため、**行単位ではアトミックだが複数行
+  全体としての原子性は無い**（decisions.md参照）
+- 詳細表示は`components/AcronymDetail.tsx`の`TagPills`
+  （主タグ・副タグをピル表示、主タグは塗りつぶしで区別、
+  flex-wrapで折り返し）と`RelatedTerms`
+  （`GET /api/acronym/[id]/related`を叩いてホモニム・概念的関連を
+  表示、両方0件ならセクション非表示）を`app/page.tsx`の
+  `DetailCard`と`app/reverse/ResultBrowser.tsx`の`DetailPanel`の
+  両方で共有する
+- ホモニム（同一acronymの別意味、大文字小文字非区別）はデータ投入
+  無しで動的クエリのみで機能する。概念的関連は`acronym_relations`
+  （現状MAD⇔SIOPの1組のみ）に基づき、`related.id`への
+  `/?id=<uuid>`リンクとして表示する。`?id=`は`app/page.tsx`が
+  `useSearchParams`で反応的に監視し、`GET /api/acronym/[id]`から
+  1件を取得して詳細ポップアップを開く（`?q=`によるディープリンクとは
+  独立した経路。`useSearchParams`使用のためpage.tsxの実体は
+  `Suspense`配下の`HomeContent`に分離した）
 
 ## PWA化の状態
 
@@ -218,8 +263,20 @@ db/
   iOS Safariでは`share_target`自体が機能しないため意図的に未実装
   （TODO.md「アプリ外からの入口整備」参照）
 
-## DBスキーマの同期（2026-08-24）
+## DBスキーマの同期（2026-08-24、2026-08-26追記）
 
+- **2026-08-26時点で`db/schema-snapshot.txt`は古い**。タグ方式移行
+  （本ドキュメント上部「カテゴリ / タグの実装状態」参照）に伴い、
+  運用者により本番DBで以下が変更済みだが、スナップショットは
+  未反映（このタスクでは.envを要するDB接続を行わないため、
+  Codeからの再取得は不可。再取得は運用者作業。手順は下記
+  「スナップショットの再取得手順」参照）:
+  - `acronyms_category_check`（旧6値のCHECK制約）が削除されている
+  - `acronym_relations`テーブル（概念的関連。id/acronym_id_a/
+    acronym_id_b/relation_note/created_at、順不同重複防止の
+    UNIQUEインデックス付き）が追加されている
+  - `tags`は19件（旧: 6件想定）、`acronym_tags`は全101件に
+    backfill済み
 - `db/schema-snapshot.txt`が**DBの正**。Neon本番DB
   （プロジェクト my-acronym-app / branch: production / database:
   neondb）から機械的に出力したカラム・制約・インデックスの一覧で、
