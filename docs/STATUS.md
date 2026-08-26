@@ -91,8 +91,14 @@ db/
 - Groqに略語を渡し、`{ results: [...] }` 形式で1〜4件の解釈を
   取得。トップレベルをオブジェクトにしているのはGroqの
   `response_format: json_object` の制約による
-- 一括INSERTは `ON CONFLICT (lower(acronym), lower(full_spelling))
-  DO NOTHING`。既存行は戻り値に含まれない（`RETURNING *`）
+- **レスポンス形状（2026-08-26変更）**: 旧・素の配列から
+  `{ results: Acronym[], rejectedCount: number }` に変更した
+  （登録候補フィルタリングでの拒否件数をクライアントへ伝えるため。
+  下記「登録候補フィルタリング」参照）
+- 個々の候補は`insertOneAcronymWithTags`で1件ずつCTE書き込み
+  （`ON CONFLICT (lower(acronym), lower(full_spelling)) DO NOTHING`
+  で旧・完全一致重複を吸収）。`insertAcronyms`（複数行一括ラッパー）
+  は使わず候補ごとに`try/catch`する（D3検出のため。下記参照）
 - 登録直後は `GET /api/search` を再度叩かず、POSTのレスポンス
   （実際に登録された行）をそのままUIに反映する
   （理由: キャッシュによる空配列問題、decisions.md 7章）
@@ -100,14 +106,63 @@ db/
   Enterキーもこの条件と揃えている
 - **`dryRun`対応（2026-08-21）**: bodyの`{ "dryRun": true }`、
   またはクエリの`?dryRun=1`/`?dryRun=true`のいずれかが真のとき、
-  Groq呼び出し・結果整形は通常通り行うが、DBへのINSERTを一切
-  行わない。読み取りは元々このエンドポイントに存在しない
-  （重複判定はDBのUNIQUE制約 + `ON CONFLICT DO NOTHING`）。
-  レスポンスは通常時と同じ配列形状で、各要素に`dryRun: true`が
-  追加される。`id`/`created_at`は実DB行が無いためその場で仮生成
-  した値（実在するIDではない）。`dryRun`未指定・偽の場合の挙動は
-  完全に従来通り。`SYSTEM_PROMPT`検証時に本番DBを汚さず繰り返す
-  ための機能。詳細: decisions.md 16章
+  Groq呼び出し・結果整形・機械判定（D1/D2/D5）・件数上限判定は
+  通常通り行うが、DBへのINSERT・`rejected_candidates`への
+  ログ書き込みは一切行わない。レスポンスは通常時と同じ
+  `{ results, rejectedCount }`形状で、`results`の各要素に
+  `dryRun: true`が追加される。`id`/`created_at`は実DB行が無いため
+  その場で仮生成した値（実在するIDではない）。`SYSTEM_PROMPT`
+  検証時に本番DBを汚さず繰り返すための機能。詳細: decisions.md 16章
+
+### 登録候補フィルタリング（2026-08-26実装）
+
+- **背景**: Groqの調査結果が無条件・複数同時にINSERTされる設計
+  だったため低価値レコードが混入していた。運用者が
+  `rejected_candidates`テーブル（id/acronym/full_spelling/
+  japanese_translation/reason_code/reason_detail/created_at）と
+  `acronyms_normalized_unique`（`(lower(acronym),
+  lower(regexp_replace(full_spelling,'[^a-zA-Z0-9]','','g')))`の
+  ユニーク制約。表記ゆれだけを狙い撃ちにし、同一略語の別概念は
+  `acronyms_acronym_full_spelling_ci_unique`により引き続き許容
+  される。変更禁止・両制約とも維持）を追加済みの状態で実装した
+- **機械判定（`lib/candidate-filter.ts` `runMachineChecks`、INSERT前・
+  LLM不要）**:
+  - D1 名称不確実: `full_spelling`に「または」「/」を含む複数候補
+    併記。許可リスト例外: `PPAP`
+  - D2 自己言及: `full_spelling`が`acronym`をそのまま含む。
+    許可リスト例外: `MIT License`
+  - D5 訳が無意味: `japanese_translation`が`acronym`と同一、または空
+  - 許可リストは`CANDIDATE_ALLOWLIST`（同ファイル）に集約。
+    追加はこのオブジェクトの編集のみで完結する
+- **D3（DB制約違反）**: `acronyms_normalized_unique`はINSERT文の
+  `ON CONFLICT`対象外の索引のため、違反時は通常のPostgres例外
+  （`23505`）として投げられる。`app/api/acronym/route.ts`が候補
+  ごとに`insertOneAcronymWithTags`を直接呼び個別に`try/catch`し、
+  `isNormalizedUniqueViolation`（`lib/db-server.ts`）で判定して
+  D3として記録する（握りつぶさない）
+- **LIMIT（1回のINSERT上限）**: `MAX_INSERT_PER_SEARCH`
+  （`lib/candidate-filter.ts`、既定3件）。機械判定を通過した候補が
+  これを超えた分は`reason_code='LIMIT'`で拒否記録し、INSERTしない
+  （Groqの生候補上限`MAX_RESULTS=4`とは別の値）
+- **Groq側の判定（プロンプト、`app/api/acronym/route.ts`
+  `buildSystemPrompt`）**: 中心テスト（実務・報道・専門文書で
+  文意が取れるか）、略語2文字以下は原則対象外（例外: BS/PL/LP/EV/pH）、
+  学位はMBAのみ、企業名・製品名は原則対象外、大学名は文脈不要で
+  通用するもののみ、IT分野は内輪用語を除外（YAGN/DRY等の
+  他分野応用可能な原則は対象）、廃止済み機関・歴史用語は対象に
+  含める、分野タグを1つも決められない場合は返さない、をプロンプトに
+  明記。Groqがこれに反する候補を返しても機械判定（D1/D2/D5）は
+  必ず通す
+- **拒否の可視化**: `POST /api/acronym`のレスポンスは
+  `{ results, rejectedCount }`。`rejectedCount > 0`のとき
+  `app/page.tsx`が「N件が基準に合わず登録されませんでした」を
+  簡潔に表示する（詳細一覧は表示しない）
+- **手動登録（`POST /api/acronym/manual`）への副次的修正**:
+  `acronyms_normalized_unique`違反が同様に無捕捉のまま500に
+  なっていたため、既存の409重複メッセージへ正しくマッピングした
+  （新しい判定基準の追加ではなく、既存の「重複」概念の是正）
+- 判定ルールの一覧・許可リストの内容はdocs/decisions.md 22章にも
+  設計判断として記録している
 
 ### 手動登録（`POST /api/acronym/manual`）
 - AI一括登録とは別エンドポイント。1件のみ登録
