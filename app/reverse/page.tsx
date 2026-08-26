@@ -103,7 +103,7 @@ export default async function ReverseIndexPage({
     <main className="min-h-dvh bg-gradient-to-b from-indigo-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       <div className="mx-auto max-w-lg px-4 py-6">
         <div className="mb-1 flex items-center justify-between gap-2">
-          <h1 className="text-2xl font-bold">逆引き辞典</h1>
+          <h1 className="text-2xl font-bold">逆引き辞書</h1>
           <Link
             href="/"
             className="inline-flex shrink-0 items-center gap-1 rounded-full border-2 border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 transition-all hover:border-indigo-400 hover:bg-indigo-100 dark:border-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 dark:hover:bg-indigo-900"

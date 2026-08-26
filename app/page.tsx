@@ -453,7 +453,7 @@ function HomeContent() {
             className="inline-flex shrink-0 items-center gap-1 rounded-full border-2 border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 transition-all hover:border-indigo-400 hover:bg-indigo-100 dark:border-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 dark:hover:bg-indigo-900"
           >
             <span aria-hidden="true">📖</span>
-            逆引き辞典
+            逆引き辞書
           </Link>
         </div>
 
