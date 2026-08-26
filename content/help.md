@@ -37,11 +37,15 @@
 
 ![共有ボタンをタップした状態](/help/pwa-add-to-homescreen_01.png)
 
+※画面写真はChromeを例にしてます。
+
 ![「ホーム画面に追加」を選ぶ画面](/help/pwa-add-to-homescreen_02.png)
 
 ![名称を決めて「追加」する画面](/help/pwa-add-to-homescreen_03.png)
 
 この際アプリの名称は自由に決められます
+
+&nbsp;
 
 ---
 
