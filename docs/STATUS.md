@@ -29,16 +29,22 @@ app/
   api/acronym/[id]/route.ts    GET 単一レコード取得（タグ同梱。関連リンク遷移用、2026-08-26新設）
   api/acronym/[id]/related/route.ts GET ホモニム+概念的関連の取得（2026-08-26新設）
   api/tags/route.ts         GET タグ一覧+表示グループ一覧（2026-08-26新設）
+  help/page.tsx             GET /help ヘルプページ。content/help.mdを静的レンダリング（2026-08-26新設）
 components/
   AcronymDetail.tsx          TagPills（複数タグ表示）・RelatedTerms（関連用語）。
                             page.tsx / reverse/ResultBrowser.tsx で共有（2026-08-26新設）
 lib/
-  db-server.ts              Neon接続、検索/INSERT/逆引き/タグ/関連用語クエリ
+  db-server.ts              Neon接続、検索/INSERT/逆引き/タグ/関連用語/登録候補クエリ
+  candidate-filter.ts       登録候補フィルタリングのD1/D2/D5判定・許可リスト・上限定数
   reverse-index.ts          逆引き画面のキー正規化・並び替え・選択解決
   types.ts                  Acronym/Tag/AcronymTag/DisplayGroup/Homonym/AcronymRelation型
+content/
+  help.md                    /helpの唯一の情報源（2026-08-26新設）。文言はこのファイルのみで管理
 public/
   manifest.json              PWAマニフェスト
   icons/icon-192.png, icon-512.png
+  help/                      /helpが参照する画像（2026-08-26新設）。ファイル差し替えのみで
+                            表示が変わる。現状はプレースホルダ(375x812のダミー画像)
 docs/
   decisions.md               設計判断の経緯（why中心）
   TODO.md                    未着手タスク
@@ -340,6 +346,50 @@ db/
   で完全一致セレクタとして依存しているため、`break-words`を
   追加していない（詳細はdecisions.md 21章）
 
+### ヘルプページ（`/help`、2026-08-26新設）
+
+- **`content/help.md`が唯一の情報源**。`app/help/page.tsx`
+  （Server Component、`"use client"`なし）が`fs.readFileSync`で
+  このファイルを読み込み、`react-markdown`でレンダリングするだけの
+  薄い層。文言をコード内にハードコードしていない
+- **ビルド時に静的レンダリング**（`next build`の出力で`/help`は
+  `○ (Static)`）。クライアント側からのfetchは行わない。本番で
+  `content/help.md`の変更を反映するには**再デプロイが必要**
+  （コード変更は不要。3-1で明示された静的レンダリング要求の帰結。
+  decisions.md 23章）
+- **マークダウンライブラリ**: `react-markdown`（v10）を採用。
+  Reactコンポーネントツリーとしてレンダインダリングするため
+  `dangerouslySetInnerHTML`を経由しない。デフォルトエクスポートの
+  `Markdown`は同期コンポーネント（内部でHooksを使わない）で
+  Server Component内でそのまま呼べる。追加パッケージはこれ1つのみ
+  （`@tailwindcss/typography`等は追加していない。見出し・画像・
+  リンク等は`components`propで独自のTailwindクラスを直接指定）
+- **生HTML無効化**: `rehype-raw`等の生HTML解釈プラグインを
+  一切追加していないため、マークダウン内のHTMLタグはエスケープ
+  表示されるだけで解釈されない（実機で`<script>`/`<b>`タグを
+  一時的に埋め込み、エスケープされることを確認済み。decisions.md
+  23章に理由を記録）
+- **画像**: `public/help/`配下に配置し、マークダウンから
+  `/help/ファイル名`で参照する。ファイルを差し替えるだけで表示が
+  変わり、コード変更は不要。`img`要素は`components`propで
+  `max-h-[70vh]`（縦長画像が画面を占有しすぎない）・`max-w-full`
+  ＋`object-contain`（横幅はコンテナに収まる）を指定。375〜1280px
+  で横スクロールが発生しないことをPlaywrightで確認済み
+  （作業用の一時スクリプト、リポジトリには残していない）
+- **プレースホルダ画像**: `public/help/pwa-add-to-homescreen.png`・
+  `shortcut-setup.png`（375×812、スマートフォンのスクリーンショット
+  相当の縦横比）。実物のスクリーンショットへの差し替えは運用者作業
+  （TODO.md参照）
+- **ナビゲーション**: トップ画面（`app/page.tsx`）の最下部に
+  目立たない「ヘルプ」テキストリンクを追加。`/help`側は右上に
+  既存パターンと同じ「🔍 検索画面へ」ピルリンクを設置
+- **`?q=`ディープリンク検索**: 既に`app/page.tsx`に実装済み
+  （`?q=` / `?id=`ディープリンク起動、上記参照）だったため、
+  3-4は追加実装不要と判断（現状確認で確認済み）。値は常に
+  Reactの`{query}`経由でレンダリングしておりJSXの自動エスケープが
+  効く（`dangerouslySetInnerHTML`は使っていない）ため、生の
+  HTML埋め込みは元から発生しない
+
 ## PWA化の状態
 
 - `public/manifest.json` あり: name/short_name/icons(192・512)/
@@ -355,6 +405,11 @@ db/
 - `manifest.json` に `share_target` はない。
   iOS Safariでは`share_target`自体が機能しないため意図的に未実装
   （TODO.md「アプリ外からの入口整備」参照）
+- `app/favicon.ico`は存在しない（運用者により`app/favicon_bak.ico`
+  へリネーム済み）。`app/icon.png`が存在し、Next.jsの特殊ファイル
+  規約により`/icon.png`メタデータルートとして自動生成される
+  （`favicon.ico`があるとそちらが優先されるため退避が必要だった。
+  運用者の意図的な変更、2026-08-26）
 
 ## DBスキーマの同期（2026-08-24、2026-08-26追記）
 
