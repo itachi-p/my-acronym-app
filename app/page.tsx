@@ -682,6 +682,15 @@ function HomeContent() {
             </div>
           )}
         </div>
+
+        <div className="mt-8 text-center">
+          <Link
+            href="/help"
+            className="text-xs text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-300"
+          >
+            ヘルプ
+          </Link>
+        </div>
       </div>
     </main>
   );
