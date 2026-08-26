@@ -113,6 +113,7 @@ function HomeContent() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [aiRejectedNotice, setAiRejectedNotice] = useState<string | null>(null);
 
   const [tags, setTags] = useState<Tag[]>([]);
   const [displayGroups, setDisplayGroups] = useState<DisplayGroup[]>([]);
@@ -246,6 +247,7 @@ function HomeContent() {
     setSelected(null);
     setSearchError(null);
     setAiError(null);
+    setAiRejectedNotice(null);
     setManualFormOpen(false);
     setManualError(null);
     // タブは前回の検索語に対する絞り込みなので、新しい検索語を
@@ -267,6 +269,7 @@ function HomeContent() {
   const handleAiGenerate = async () => {
     setAiLoading(true);
     setAiError(null);
+    setAiRejectedNotice(null);
 
     try {
       const res = await fetch("/api/acronym", {
@@ -281,6 +284,9 @@ function HomeContent() {
 
       const data = await res.json();
 
+      // 候補が基準に合わず0件になったケースも200 + results:[] +
+      // rejectedCountで返る(3-4参照)。res.ok===falseはGroq呼び出し
+      // 自体の失敗等、真のエラーのみを意味する。
       if (!res.ok) {
         const message =
           data && typeof data === "object" && "error" in data
@@ -293,10 +299,17 @@ function HomeContent() {
       // 登録直後はGET /api/searchを叩き直さず、POSTの戻り値を
       // そのまま反映する。1件のみ登録された場合は詳細を直接開き、
       // 複数の解釈が登録された場合は一覧から選ばせる。
-      const items = Array.isArray(data) ? (data as Acronym[]) : [];
+      const items = Array.isArray(data?.results) ? (data.results as Acronym[]) : [];
+      const rejectedCount =
+        typeof data?.rejectedCount === "number" ? data.rejectedCount : 0;
 
       setResults(items);
       setSelected(items.length === 1 ? items[0] : null);
+      setAiRejectedNotice(
+        rejectedCount > 0
+          ? `${rejectedCount}件が基準に合わず登録されませんでした`
+          : null
+      );
     } catch (error: unknown) {
       setAiError(error instanceof Error ? error.message : "通信エラー");
     } finally {
@@ -528,6 +541,10 @@ function HomeContent() {
           {aiLoading && <p>AIで調査中...</p>}
 
           {aiError && <p className="text-red-600">{aiError}</p>}
+
+          {aiRejectedNotice && (
+            <p className="text-sm text-slate-500">ℹ️ {aiRejectedNotice}</p>
+          )}
 
           {query.length >= 2 && !loading && !searchError && (
             <div>

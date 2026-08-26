@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getActiveTags, insertAcronyms } from "@/lib/db-server";
+import {
+  getActiveTags,
+  insertAcronyms,
+  isNormalizedUniqueViolation,
+} from "@/lib/db-server";
 import { normalizeAcronymCasing } from "@/lib/normalize-acronym";
 
 const MAX_TAGS = 3;
@@ -89,6 +93,23 @@ export async function POST(request: NextRequest) {
     ]);
 
     if (error) {
+      // acronyms_normalized_unique(表記ゆれ正規化ユニーク制約)は
+      // insertAcronymsのON CONFLICT対象(lower(acronym),
+      // lower(full_spelling))とは別の索引のため、違反時はDO NOTHINGで
+      // 吸収されず通常のPostgres例外として投げられる。ここを汎用の
+      // 500で握りつぶさず、下の完全一致重複と同じ409重複メッセージに
+      // 正しくマッピングする(意味的には同じ「既に登録済み」)。
+      if (isNormalizedUniqueViolation(error)) {
+        return NextResponse.json(
+          {
+            error: "表記ゆれを除けば同じ略語・正式名称が既に登録されています",
+          },
+          {
+            status: 409,
+          }
+        );
+      }
+
       console.error("[Manual Insert Error]", error);
 
       return NextResponse.json(

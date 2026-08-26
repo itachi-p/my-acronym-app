@@ -1,8 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import type { Acronym, AcronymTag, Tag } from "@/lib/types";
-import { getActiveTags, insertAcronyms } from "@/lib/db-server";
+import {
+  getActiveTags,
+  insertOneAcronymWithTags,
+  isNormalizedUniqueViolation,
+  recordRejectedCandidates,
+  toQueryError,
+  type RejectedCandidateInsertRow,
+} from "@/lib/db-server";
 import { normalizeAcronymCasing } from "@/lib/normalize-acronym";
+import { runMachineChecks } from "@/lib/candidate-filter";
 
 const MAX_RESULTS = 4;
 const MAX_TAGS_PER_RESULT = 3;
@@ -258,7 +266,7 @@ export async function POST(request: NextRequest) {
 
     const rawResults = Array.isArray(parsed.results) ? parsed.results : [];
 
-    const insertData = rawResults
+    const candidates = rawResults
       .slice(0, MAX_RESULTS)
       .map((item) => {
         const result = (item ?? {}) as Record<string, unknown>;
@@ -273,7 +281,7 @@ export async function POST(request: NextRequest) {
       })
       .filter((row) => row.full_spelling !== "");
 
-    if (insertData.length === 0) {
+    if (candidates.length === 0) {
       console.error("[Groq Empty Results]", content);
 
       return NextResponse.json(
@@ -286,11 +294,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // dryRun時はINSERT自体を発行しない（書き込み経路に到達させない）。
+    // 3-1: 機械判定(D1/D2/D5)をINSERT前に実行する。Groqが採用基準に
+    // 反する候補を返した場合でも、ここは必ず通す(3-2参照)。
+    const rejected: RejectedCandidateInsertRow[] = [];
+    const machineChecked: typeof candidates = [];
+
+    for (const candidate of candidates) {
+      const failure = runMachineChecks(candidate);
+
+      if (failure) {
+        rejected.push({
+          acronym: candidate.acronym,
+          full_spelling: candidate.full_spelling,
+          japanese_translation: candidate.japanese_translation,
+          reason_code: failure.reasonCode,
+          reason_detail: failure.reasonDetail,
+        });
+      } else {
+        machineChecked.push(candidate);
+      }
+    }
+
+    const accepted = machineChecked;
+
+    // dryRun時はINSERT自体もrejected_candidatesへのログも発行しない
+    // （書き込み経路に到達させない。decisions.md 16章の方針を踏襲）。
     // idとcreated_atは実DB行が存在しないため、それらを要求する
     // Acronym型の形を保つ目的でのみここで仮生成する（実在するIDではない）。
     if (dryRun) {
-      const preview: (Acronym & { dryRun: true })[] = insertData.map((row) => ({
+      const preview: (Acronym & { dryRun: true })[] = accepted.map((row) => ({
         id: randomUUID(),
         acronym: row.acronym,
         full_spelling: row.full_spelling,
@@ -307,26 +339,64 @@ export async function POST(request: NextRequest) {
         dryRun: true,
       }));
 
-      return NextResponse.json(preview);
+      return NextResponse.json({ results: preview, rejectedCount: rejected.length });
     }
 
-    const { data, error } = await insertAcronyms(insertData);
+    // D3(表記ゆれ正規化ユニーク制約違反)は候補単位で捕捉する。
+    // insertAcronyms(複数行をまとめて呼ぶラッパー)は1行でも例外が
+    // 出るとバッチ全体を中断してしまい、既に成功していた候補の
+    // 情報も失われるため使わず、ここで候補ごとにtry/catchする。
+    const inserted: Acronym[] = [];
 
-    if (error) {
-      console.error("[DB Insert Error]", error);
+    for (const candidate of accepted) {
+      try {
+        const rows = await insertOneAcronymWithTags(candidate);
+        inserted.push(...rows);
+      } catch (err) {
+        const queryError = toQueryError(err);
 
-      return NextResponse.json(
-        {
-          error: "DB保存に失敗しました",
-          detail: error.message,
-        },
-        {
-          status: 500,
+        if (isNormalizedUniqueViolation(queryError)) {
+          rejected.push({
+            acronym: candidate.acronym,
+            full_spelling: candidate.full_spelling,
+            japanese_translation: candidate.japanese_translation,
+            reason_code: "D3",
+            reason_detail:
+              "表記ゆれ正規化ユニーク制約(acronyms_normalized_unique)違反",
+          });
+          continue;
         }
-      );
+
+        // D3以外の想定外のDBエラーは握りつぶさない。
+        console.error("[DB Insert Error]", queryError);
+
+        if (rejected.length > 0) {
+          const { error: logError } = await recordRejectedCandidates(rejected);
+          if (logError) console.error("[Rejected Candidates Log Error]", logError);
+        }
+
+        return NextResponse.json(
+          {
+            error: "DB保存に失敗しました",
+            detail: queryError.message,
+          },
+          {
+            status: 500,
+          }
+        );
+      }
     }
 
-    return NextResponse.json(data);
+    if (rejected.length > 0) {
+      const { error: logError } = await recordRejectedCandidates(rejected);
+      if (logError) console.error("[Rejected Candidates Log Error]", logError);
+    }
+
+    // insertedが0件でも、rejectedにD1/D2/D3/D5/LIMITの記録があるなら
+    // 「見つからなかった」のではなく「基準に合わず拒否された」ので、
+    // 404(AI調査失敗)ではなく200+rejectedCountで返す(3-4のUI通知が
+    // 拾えるようにするため)。
+    return NextResponse.json({ results: inserted, rejectedCount: rejected.length });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
 

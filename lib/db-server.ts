@@ -27,15 +27,24 @@ const sql = neon(process.env.DATABASE_URL!, {
   fetchOptions: { cache: "no-store" },
 });
 
-type QueryError = { message: string; code?: string };
+export type QueryError = { message: string; code?: string; constraint?: string };
 
-function toQueryError(err: unknown): QueryError {
+export function toQueryError(err: unknown): QueryError {
   if (err && typeof err === "object" && "message" in err) {
     const code = "code" in err && typeof (err as { code?: unknown }).code === "string"
       ? (err as { code: string }).code
       : undefined;
+    const constraint =
+      "constraint" in err &&
+      typeof (err as { constraint?: unknown }).constraint === "string"
+        ? (err as { constraint: string }).constraint
+        : undefined;
 
-    return { message: String((err as { message: unknown }).message), code };
+    return {
+      message: String((err as { message: unknown }).message),
+      code,
+      constraint,
+    };
   }
 
   return { message: String(err) };
@@ -328,7 +337,27 @@ export interface AcronymInsertRow {
 // target tables")。そのため、挿入に使ったtag_rows CTE自体をtagsへ
 // 結合してJSONを組み立てる(RETURNINGと同様、同一文内で安全に
 // 参照できる)。
-async function insertOneAcronymWithTags(
+// 表記ゆれ正規化ユニーク制約の名前。ON CONFLICTの対象
+// (lower(acronym), lower(full_spelling))とは別の索引のため、
+// この制約への違反はON CONFLICT DO NOTHINGでは吸収されず、
+// 通常のPostgres例外(23505)として投げられる。呼び出し側
+// (app/api/acronym/route.ts)がこれを捕捉し、D3として
+// rejected_candidatesに記録する。
+export const NORMALIZED_UNIQUE_CONSTRAINT = "acronyms_normalized_unique";
+
+export function isNormalizedUniqueViolation(error: QueryError): boolean {
+  return (
+    error.code === "23505" &&
+    (error.constraint === undefined ||
+      error.constraint === NORMALIZED_UNIQUE_CONSTRAINT)
+  );
+}
+
+// 呼び出し側(app/api/acronym/route.ts)が候補ごとに個別のtry/catchで
+// エラーを捕捉できるよう公開する(insertAcronymsは複数行をまとめて
+// 呼ぶラッパーで、1行でも例外が出るとバッチ全体を中断してしまうため、
+// 候補単位でD3を検出したい登録フィルタリング機能には使えない)。
+export async function insertOneAcronymWithTags(
   row: AcronymInsertRow
 ): Promise<Acronym[]> {
   const tagNames = Array.from(new Set(row.tags)).slice(0, 3);
@@ -411,6 +440,58 @@ export async function insertAcronyms(rows: AcronymInsertRow[]) {
     }
 
     return { data, error: null };
+  } catch (err) {
+    return { data: null, error: toQueryError(err) };
+  }
+}
+
+export interface RejectedCandidateInsertRow {
+  acronym: string;
+  full_spelling: string;
+  japanese_translation: string;
+  reason_code: string;
+  reason_detail: string;
+}
+
+// 登録候補フィルタリング(3-1〜3-3)で拒否された候補を
+// rejected_candidatesへログとして残す。既存レコードの削除・修正は
+// 一切行わない別テーブルへの追記のみで、拒否を"消す"のではなく
+// "残す"ことで誤検知の事後検証を可能にする(decisions.md参照)。
+// ログの書き込み自体に失敗しても、これは診断用の副作用でしかないため
+// 呼び出し側の主フロー(候補の登録可否判定・INSERT)を失敗させない
+// (呼び出し側でerrorをconsole.errorするに留める設計を想定)。
+export async function recordRejectedCandidates(
+  rows: RejectedCandidateInsertRow[]
+) {
+  if (rows.length === 0) {
+    return { data: [], error: null };
+  }
+
+  try {
+    const params: unknown[] = [];
+    const valuesSql = rows
+      .map((row, i) => {
+        const base = i * 5;
+        params.push(
+          row.acronym,
+          row.full_spelling,
+          row.japanese_translation,
+          row.reason_code,
+          row.reason_detail
+        );
+
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`;
+      })
+      .join(", ");
+
+    await sql.query(
+      `INSERT INTO rejected_candidates
+         (acronym, full_spelling, japanese_translation, reason_code, reason_detail)
+       VALUES ${valuesSql}`,
+      params
+    );
+
+    return { data: rows, error: null };
   } catch (err) {
     return { data: null, error: toQueryError(err) };
   }
