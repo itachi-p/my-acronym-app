@@ -72,13 +72,24 @@ const components: Components = {
   // 最大高さを制限する(max-h-*)。ファイルを差し替えるだけで表示が
   // 変わり、この設定自体はコード変更が不要な範囲(見た目の制約)に
   // とどめてある。
+  //
+  // w-full は付けない。widthを明示するとbox幅がコンテナ幅
+  // (max-w-lgラッパー由来の480px)に固定され、max-h-[70vh]による
+  // 高さ制約と組み合わさった結果、object-containが絵を実寸より
+  // 小さく縮小して箱の中央に描画し、左右に大きな空白(レターボックス)
+  // が生じていた(枠480×491pxに対し絵は226×491px、空白254px=
+  // 枠面積の53%)。widthを指定しなければ、preflightのheight:autoと
+  // max-heightの制約から幅が画像の縦横比(346:750)に基づいて
+  // 逆算され、枠が絵の実寸に密着する。object-containは箱と絵の
+  // 寸法差がなくなり不要になったため削除した(このimg以外での
+  // 使用箇所なし。削除して問題ない)。中央寄せはmx-autoで維持する。
   img: (props) => (
     // eslint-disable-next-line @next/next/no-img-element -- public/help/配下の画像をファイル差し替えのみで反映させたいため、next/imageの最適化パイプライン(ビルド時の許可リスト等)を経由させない
     <img
       {...props}
       alt={props.alt ?? ""}
       loading="lazy"
-      className="mt-3 max-h-[70vh] w-full max-w-full rounded-xl border border-slate-300 object-contain dark:border-slate-600"
+      className="mx-auto mt-3 max-h-[70vh] max-w-full rounded-xl border border-slate-300 dark:border-slate-600"
     />
   ),
 };
