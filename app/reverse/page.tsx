@@ -98,6 +98,9 @@ export default async function ReverseIndexPage({
   const counts = sortIndexKeyCounts(countsData);
   const availableKeys = counts.map((c) => c.key);
   const selectedKey = resolveIndexSelection(normalizedKey, availableKeys);
+  // 総登録件数はキー別集計(counts)の合計から求める。専用クエリを
+  // 追加せず、既に取得済みのgetAcronymIndexCountsの結果を使い回す。
+  const totalCount = counts.reduce((sum, c) => sum + c.count, 0);
 
   return (
     <main className="min-h-dvh bg-gradient-to-b from-indigo-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
@@ -112,8 +115,11 @@ export default async function ReverseIndexPage({
             検索画面へ
           </Link>
         </div>
-        <p className="mb-5 text-sm text-slate-500">
+        <p className="text-sm text-slate-500">
           アクロニムの先頭文字を選ぶと一覧が表示されます（[ ]内は登録件数）
+        </p>
+        <p className="mb-5 text-xs text-slate-400">
+          現在の総登録件数: {totalCount}件
         </p>
 
         <IndexBar counts={counts} selectedKey={selectedKey} />
