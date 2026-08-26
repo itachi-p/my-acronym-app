@@ -113,7 +113,10 @@ function HomeContent() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [aiRejectedNotice, setAiRejectedNotice] = useState<string | null>(null);
+  const [aiRejectedInfo, setAiRejectedInfo] = useState<{
+    count: number;
+    reasonCodes: string[];
+  } | null>(null);
 
   const [tags, setTags] = useState<Tag[]>([]);
   const [displayGroups, setDisplayGroups] = useState<DisplayGroup[]>([]);
@@ -247,7 +250,7 @@ function HomeContent() {
     setSelected(null);
     setSearchError(null);
     setAiError(null);
-    setAiRejectedNotice(null);
+    setAiRejectedInfo(null);
     setManualFormOpen(false);
     setManualError(null);
     // タブは前回の検索語に対する絞り込みなので、新しい検索語を
@@ -269,7 +272,7 @@ function HomeContent() {
   const handleAiGenerate = async () => {
     setAiLoading(true);
     setAiError(null);
-    setAiRejectedNotice(null);
+    setAiRejectedInfo(null);
 
     try {
       const res = await fetch("/api/acronym", {
@@ -302,12 +305,15 @@ function HomeContent() {
       const items = Array.isArray(data?.results) ? (data.results as Acronym[]) : [];
       const rejectedCount =
         typeof data?.rejectedCount === "number" ? data.rejectedCount : 0;
+      const rejectedReasonCodes = Array.isArray(data?.rejectedReasonCodes)
+        ? (data.rejectedReasonCodes as string[])
+        : [];
 
       setResults(items);
       setSelected(items.length === 1 ? items[0] : null);
-      setAiRejectedNotice(
+      setAiRejectedInfo(
         rejectedCount > 0
-          ? `${rejectedCount}件が基準に合わず登録されませんでした`
+          ? { count: rejectedCount, reasonCodes: rejectedReasonCodes }
           : null
       );
     } catch (error: unknown) {
@@ -542,9 +548,29 @@ function HomeContent() {
 
           {aiError && <p className="text-red-600">{aiError}</p>}
 
-          {aiRejectedNotice && (
-            <p className="text-sm text-slate-500">ℹ️ {aiRejectedNotice}</p>
-          )}
+          {aiRejectedInfo &&
+            (aiRejectedInfo.reasonCodes.includes("A1") ? (
+              <div className="rounded-xl border-2 border-slate-300 bg-slate-50 p-3 text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                <p>
+                  2文字の略語は誤登録が多いため、自動登録を制限しています。
+                  必要な場合は手動登録から追加してください。
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManualFormOpen(true);
+                    setManualError(null);
+                  }}
+                  className="mt-2 font-medium text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400"
+                >
+                  手動で登録する
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">
+                ℹ️ {aiRejectedInfo.count}件が基準に合わず登録されませんでした
+              </p>
+            ))}
 
           {query.length >= 2 && !loading && !searchError && (
             <div>

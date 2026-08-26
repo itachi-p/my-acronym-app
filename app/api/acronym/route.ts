@@ -294,7 +294,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3-1: 機械判定(D1/D2/D5)をINSERT前に実行する。Groqが採用基準に
+    // 3-1: 機械判定(A1/D1/D2/D5)をINSERT前に実行する。Groqが採用基準に
     // 反する候補を返した場合でも、ここは必ず通す(3-2参照)。
     const rejected: RejectedCandidateInsertRow[] = [];
     const machineChecked: typeof candidates = [];
@@ -352,7 +352,11 @@ export async function POST(request: NextRequest) {
         dryRun: true,
       }));
 
-      return NextResponse.json({ results: preview, rejectedCount: rejected.length });
+      return NextResponse.json({
+        results: preview,
+        rejectedCount: rejected.length,
+        rejectedReasonCodes: Array.from(new Set(rejected.map((r) => r.reason_code))),
+      });
     }
 
     // D3(表記ゆれ正規化ユニーク制約違反)は候補単位で捕捉する。
@@ -405,11 +409,16 @@ export async function POST(request: NextRequest) {
       if (logError) console.error("[Rejected Candidates Log Error]", logError);
     }
 
-    // insertedが0件でも、rejectedにD1/D2/D3/D5/LIMITの記録があるなら
+    // insertedが0件でも、rejectedにA1/D1/D2/D3/D5/LIMITの記録があるなら
     // 「見つからなかった」のではなく「基準に合わず拒否された」ので、
     // 404(AI調査失敗)ではなく200+rejectedCountで返す(3-4のUI通知が
-    // 拾えるようにするため)。
-    return NextResponse.json({ results: inserted, rejectedCount: rejected.length });
+    // 拾えるようにするため)。rejectedReasonCodesはUI側がA1(短すぎる
+    // 略語)とそれ以外を区別したメッセージを出し分けるために使う。
+    return NextResponse.json({
+      results: inserted,
+      rejectedCount: rejected.length,
+      rejectedReasonCodes: Array.from(new Set(rejected.map((r) => r.reason_code))),
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
 
