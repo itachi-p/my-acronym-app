@@ -10,7 +10,7 @@ import {
   type RejectedCandidateInsertRow,
 } from "@/lib/db-server";
 import { normalizeAcronymCasing } from "@/lib/normalize-acronym";
-import { runMachineChecks } from "@/lib/candidate-filter";
+import { MAX_INSERT_PER_SEARCH, runMachineChecks } from "@/lib/candidate-filter";
 
 const MAX_RESULTS = 4;
 const MAX_TAGS_PER_RESULT = 3;
@@ -315,7 +315,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const accepted = machineChecked;
+    // 3-3: 1回のINSERT上限。機械判定を通過した候補のうち、
+    // 上限を超えた分はreason_code='LIMIT'で拒否記録する。
+    const accepted = machineChecked.slice(0, MAX_INSERT_PER_SEARCH);
+    const overLimit = machineChecked.slice(MAX_INSERT_PER_SEARCH);
+
+    for (const candidate of overLimit) {
+      rejected.push({
+        acronym: candidate.acronym,
+        full_spelling: candidate.full_spelling,
+        japanese_translation: candidate.japanese_translation,
+        reason_code: "LIMIT",
+        reason_detail: `1回の登録上限(${MAX_INSERT_PER_SEARCH}件)を超過`,
+      });
+    }
 
     // dryRun時はINSERT自体もrejected_candidatesへのログも発行しない
     // （書き込み経路に到達させない。decisions.md 16章の方針を踏襲）。
