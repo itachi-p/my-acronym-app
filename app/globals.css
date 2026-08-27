@@ -48,3 +48,30 @@ body {
     transform: translateY(0);
   }
 }
+
+/*
+ * /helpの画像レイアウト(PC向け、モバイルファースト: min-width方向のみ)。
+ * 縦長スクリーンショットが連続すると1カラムのままではページが
+ * 極端に長くなる(実測: 幅1123pxで8757px)ため、1024px以上でのみ
+ * article をグリッド化し、「画像だけの段落」を3カラムへ横並びさせる。
+ * それ以外の要素(見出し・本文・リスト)は常にフル幅の1行にする。
+ * ベース(モバイル)のスタイルは一切変更しない。max-width方向の
+ * メディアクエリでスマホ表示を上書きすることはしない
+ * (docs/decisions.md参照)。
+ */
+@media (min-width: 1024px) {
+  .help-article {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .help-article > * {
+    grid-column: 1 / -1;
+  }
+
+  .help-article > p:has(> img:only-child) {
+    grid-column: auto;
+  }
+}

@@ -13,41 +13,48 @@ const HELP_MARKDOWN_PATH = path.join(process.cwd(), "content", "help.md");
 // エスケープ表示される)。信頼できる管理下のファイルではあるが、
 // 生HTMLを有効化する経路自体を作らない方針を維持するため、
 // rehype-raw/remark-rehypeのallowDangerousHtmlは一切使わない。
+// lg:max-w-[40em]は1024px以上でのみ効く(モバイルのbaseスタイルは
+// 変更しない)。article をグリッド化した際、フル幅(grid-column:1/-1)
+// の本文がグリッド全幅まで間延びしないよう、日本語35〜45文字程度を
+// 目安に1行の長さを抑える(globals.cssの.help-articleグリッド定義と
+// 対応)。
+const TEXT_MAX_WIDTH_CLASS = "lg:max-w-[40em]";
+
 const components: Components = {
   h1: (props) => (
     <h1
       {...props}
-      className="text-2xl font-bold text-slate-900 dark:text-white"
+      className={`text-2xl font-bold text-slate-900 dark:text-white ${TEXT_MAX_WIDTH_CLASS}`}
     />
   ),
   h2: (props) => (
     <h2
       {...props}
-      className="mt-8 text-xl font-bold text-indigo-600 first:mt-6 dark:text-indigo-400"
+      className={`mt-8 text-xl font-bold text-indigo-600 first:mt-6 dark:text-indigo-400 ${TEXT_MAX_WIDTH_CLASS}`}
     />
   ),
   h3: (props) => (
     <h3
       {...props}
-      className="mt-5 text-base font-semibold text-slate-800 dark:text-slate-100"
+      className={`mt-5 text-base font-semibold text-slate-800 dark:text-slate-100 ${TEXT_MAX_WIDTH_CLASS}`}
     />
   ),
   p: (props) => (
     <p
       {...props}
-      className="mt-2 break-words leading-relaxed text-slate-700 dark:text-slate-300"
+      className={`mt-2 break-words leading-relaxed text-slate-700 dark:text-slate-300 ${TEXT_MAX_WIDTH_CLASS}`}
     />
   ),
   ol: (props) => (
     <ol
       {...props}
-      className="mt-2 list-decimal space-y-1 pl-5 text-slate-700 dark:text-slate-300"
+      className={`mt-2 list-decimal space-y-1 pl-5 text-slate-700 dark:text-slate-300 ${TEXT_MAX_WIDTH_CLASS}`}
     />
   ),
   ul: (props) => (
     <ul
       {...props}
-      className="mt-2 list-disc space-y-1 pl-5 text-slate-700 dark:text-slate-300"
+      className={`mt-2 list-disc space-y-1 pl-5 text-slate-700 dark:text-slate-300 ${TEXT_MAX_WIDTH_CLASS}`}
     />
   ),
   li: (props) => <li {...props} className="break-words leading-relaxed" />,
@@ -99,7 +106,13 @@ export default function HelpPage() {
 
   return (
     <main className="min-h-dvh bg-gradient-to-b from-indigo-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      <div className="mx-auto max-w-lg px-4 py-6">
+      {/*
+        PC向け(lg: = 1024px以上)ではコンテナ幅を広げ、画像だけの段落を
+        3カラムへ横並びさせる(globals.cssの.help-articleグリッド定義)。
+        モバイルのbaseスタイル(max-w-lg)は変更しない、min-width方向の
+        上乗せのみ(モバイルファースト原則、docs/decisions.md参照)。
+      */}
+      <div className="mx-auto max-w-lg px-4 py-6 lg:max-w-4xl">
         <div className="mb-1 flex items-center justify-end gap-2">
           <Link
             href="/"
@@ -110,7 +123,7 @@ export default function HelpPage() {
           </Link>
         </div>
 
-        <article className="mt-4">
+        <article className="help-article mt-4">
           <Markdown components={components}>{source}</Markdown>
         </article>
       </div>
