@@ -116,10 +116,14 @@ export default async function ReverseIndexPage({
           </Link>
         </div>
         <p className="text-sm text-slate-500">
-          アクロニムの先頭文字を選ぶと一覧が表示されます（[ ]内は登録件数）
+          略語の先頭文字を選ぶと一覧が表示されます（[ ]内は登録件数）
         </p>
-        <p className="mb-5 text-xs text-slate-400">
-          現在の総登録件数: {totalCount}件
+        <hr></hr>
+        <p className="mb-5 py-3 text-sm text-slate-600 dark:text-slate-300">
+          <span className="font-bold">現在の総登録件数</span>:{" "}
+          <span className="text-indigo-600 dark:text-indigo-400">
+            {totalCount}件
+          </span>
         </p>
 
         <IndexBar counts={counts} selectedKey={selectedKey} />
