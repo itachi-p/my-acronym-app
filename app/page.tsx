@@ -712,7 +712,7 @@ function HomeContent() {
         <div className="mt-8 text-center">
           <Link
             href="/help"
-            className="text-xs text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-300"
+            className="inline-block rounded-full border border-slate-300 px-4 py-1.5 text-xs text-slate-500 transition-colors hover:border-slate-400 hover:text-slate-700 dark:border-slate-600 dark:text-slate-400 dark:hover:border-slate-500 dark:hover:text-slate-200"
           >
             ヘルプ
           </Link>
