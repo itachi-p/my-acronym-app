@@ -397,6 +397,14 @@ db/
   常にフル幅（`grid-column: 1/-1`）。本文は`lg:max-w-[40em]`で
   行長を維持。モバイルのベーススタイルは無変更。詳細はdecisions.md
   26章参照
+- **2026-08-27追記（フローティング「トップに戻る」ボタン）**:
+  `app/help/BackToTopButton.tsx`（Client Component、`app/reverse/
+  ResultBrowser.tsx`と同じくルート直下に配置しページ固有の
+  Client Componentを`components/`と分離）。300px以上スクロールで
+  フェード表示、クリックで`window.scrollTo({behavior: "smooth"})`
+  によりトップへ戻る（`prefers-reduced-motion`時は`"auto"`）。
+  `bottom-[max(1.5rem,env(safe-area-inset-bottom))]`でPWA起動時の
+  ホームインジケータとの重なりを回避
 - **プレースホルダ画像**: `public/help/pwa-add-to-homescreen.png`・
   `shortcut-setup.png`（375×812、スマートフォンのスクリーンショット
   相当の縦横比）。実物のスクリーンショットへの差し替えは運用者作業

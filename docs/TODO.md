@@ -1,6 +1,14 @@
 # TODO
 
 ## 完了
+- ヘルプページにフローティング「トップに戻る」ボタンを追加 (2026-08-27)
+  ページが縦長（PC最適化後も1万px超）なため、300px以上スクロール
+  すると右下にフェード表示されるボタンを追加。クリックで
+  `window.scrollTo`によりトップへスムーズスクロールする。
+  `app/help/BackToTopButton.tsx`（Client Component、`app/reverse/
+  ResultBrowser.tsx`と同じ流儀でルート直下に配置）。375〜1280pxで
+  表示切り替え・クリック時のスクロール・PWA起動時のセーフエリア
+  考慮をPlaywrightと実機相当のビューポートで確認済み
 - ヘルプページのPC向けレイアウト最適化 (2026-08-27)
   `max-w-lg`固定の1カラム構成だった`/help`を、1024px以上でのみ
   `.help-article`をCSS Grid化（3カラム）し、画像単体の段落を
