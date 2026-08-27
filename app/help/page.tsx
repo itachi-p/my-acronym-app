@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import Link from "next/link";
 import Markdown, { type Components } from "react-markdown";
+import { BackToTopButton } from "./BackToTopButton";
 
 // content/help.mdが唯一の情報源。文言・画像の差し替えはこのファイルと
 // public/help/配下の画像を編集するだけで完結させ、コード変更を
@@ -127,6 +128,8 @@ export default function HelpPage() {
           <Markdown components={components}>{source}</Markdown>
         </article>
       </div>
+
+      <BackToTopButton />
     </main>
   );
 }
