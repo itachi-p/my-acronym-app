@@ -1,5 +1,5 @@
 // AI(Groq)登録候補のINSERT前フィルタリング。
-// 機械判定(A1/D1/D2/D5)はここに集約する。D3(表記ゆれ正規化ユニーク
+// 機械判定(A1/D1/D2/D5/S1)はここに集約する。D3(表記ゆれ正規化ユニーク
 // 制約違反)はDB INSERT時のエラー捕捉でのみ検出できるため、ここには
 // 含めない(呼び出し側=app/api/acronym/route.tsが担当)。
 // LIMIT(1回のINSERT上限超過)も判定ロジックではなく件数の話なので
@@ -10,12 +10,17 @@
 // importしておらず、意図的に適用対象外(人間が意図して入力する経路の
 // 暴走抑制は不要なため)。
 
-export type RejectionReasonCode = "A1" | "D1" | "D2" | "D3" | "D5" | "LIMIT";
+export type RejectionReasonCode = "A1" | "D1" | "D2" | "D5" | "S1" | "D3" | "LIMIT";
 
 export interface CandidateInput {
   acronym: string;
   full_spelling: string;
   japanese_translation: string;
+  // Groqが返す収録範囲判定。undefinedは「フィールド欠落・指示不遵守で
+  // 範囲外と断定できない」ことを表し、checkS1では通過させる(fail-open)。
+  // app/api/acronym/route.tsのnormalizeScopeFit参照。
+  scope_fit?: "in" | "out";
+  scope_reason?: string;
 }
 
 export interface MachineCheckFailure {
@@ -115,6 +120,23 @@ function checkD2(candidate: CandidateInput): MachineCheckFailure | null {
   return null;
 }
 
+// S1: 収録範囲外。プロンプトの「収録範囲」指示(app/api/acronym/route.ts)に
+// Groq自身が"out"と判定した候補が従わずに紛れ込んだ場合の機械的な
+// 最終防波堤。A1と同じ理由(プロンプト指示だけではGroqが従わない場合の
+// 挙動が再現しない)でコード側にも判定を置く。scope_fitが未指定
+// (フィールド欠落等)の場合は範囲外と断定できないため通過させる
+// (fail-open。既存候補への影響を避けるための安全側の選択)。
+function checkS1(candidate: CandidateInput): MachineCheckFailure | null {
+  if (candidate.scope_fit !== "out") {
+    return null;
+  }
+
+  return {
+    reasonCode: "S1",
+    reasonDetail: `収録範囲外: ${candidate.scope_reason || "理由未提供"}`,
+  };
+}
+
 // D5: 訳が無意味。japanese_translationがacronymと同一、または空。
 function checkD5(candidate: CandidateInput): MachineCheckFailure | null {
   const translation = candidate.japanese_translation.trim();
@@ -133,12 +155,18 @@ function checkD5(candidate: CandidateInput): MachineCheckFailure | null {
   return null;
 }
 
-// A1→D1→D2→D5の順に機械判定を行い、最初に該当したものを返す
+// A1→D1→D2→S1→D5の順に機械判定を行い、最初に該当したものを返す
 // (複数該当しても記録する理由は1つに絞る)。該当なしはnull。
+// S1はD2より後・D5より前に置く(構文的な妥当性(D1/D2)を先に見て、
+// トピックの適合性(S1)は次点、翻訳の質(D5)は最後という優先度)。
 export function runMachineChecks(
   candidate: CandidateInput
 ): MachineCheckFailure | null {
   return (
-    checkA1(candidate) ?? checkD1(candidate) ?? checkD2(candidate) ?? checkD5(candidate)
+    checkA1(candidate) ??
+    checkD1(candidate) ??
+    checkD2(candidate) ??
+    checkS1(candidate) ??
+    checkD5(candidate)
   );
 }
