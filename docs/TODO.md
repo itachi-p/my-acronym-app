@@ -1,6 +1,21 @@
 # TODO
 
 ## 完了
+- 新語登録フィルタにS1(収録範囲外)を追加、VibeCoding関連用語を明示的に許可 (2026-08-30)
+  MP1/MP2（音楽コーデック）・TDD/DDD検索時の無関係な医療用語混入
+  など、基準が緩く不要な候補が登録される問題への対応。Groqの
+  プロンプトに「収録範囲」定義を追加し、各候補に`scope_fit`
+  ("in"/"out")・`scope_reason`を返させ、`lib/candidate-filter.ts`の
+  `checkS1`で"out"を文字数に関わらず棄却する。あわせて「複数の
+  意味を返す場合は異なるジャンルに跨る解釈を優先」という指示が
+  範囲外ジャンルの混入を助長していたため「範囲内に限る」よう修正。
+  VibeCoding（AI活用アプリ開発）関連用語・分野横断的な開発原則
+  （YAGNI/DRY）を収録範囲に明記。2文字略語のA1判定
+  （`CANDIDATE_ALLOWLIST.shortAcronyms`）は今回変更していない。
+  層1相当のモックテスト9件を`lib/__tests__/candidate-filter.spec.ts`
+  に追加（`npm run test:unit`、新規`playwright.unit.config.ts`で
+  ブラウザ・DB・APIキー不要）。詳細はdocs/decisions.md 27章、
+  docs/STATUS.md「登録候補フィルタリング」参照
 - ヘルプページにフローティング「トップに戻る」ボタンを追加 (2026-08-27)
   ページが縦長（PC最適化後も1万px超）なため、300px以上スクロール
   すると右下にフェード表示されるボタンを追加。クリックで
@@ -104,6 +119,14 @@
 
 ## 未着手
 
+- 2文字略語の条件付き許可（`scope_fit`連動、VC/EU等）
+  2026-08-27頃の作業指示で提案されたが未着手。現状2文字以下は
+  `CANDIDATE_ALLOWLIST.shortAcronyms`（BS/PL/LP/EV/PH）の固定
+  リスト方式のままで、VC(Venture Capital)のような収録範囲の
+  主軸ど真ん中の語も機械的に弾かれる。2026-08-30のS1追加時は
+  「基準を緩める」変更は既存を壊すリスクがあるとして意図的に
+  見送った（decisions.md 27章）。着手する場合は、固定リストの
+  廃止を伴う設計変更になる点に注意
 - ヘルプページのプレースホルダ画像を実物に差し替える（運用者作業）
   `public/help/pwa-add-to-homescreen.png`・`shortcut-setup.png`は
   現在375×812のダミー画像（アスペクト比のみ実物相当）。実際の
